@@ -1,0 +1,1257 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>融資支援管理システム</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
+<style>
+  #sidebar { transition: transform 0.25s cubic-bezier(.4,0,.2,1); }
+  .page { display: none; }
+  .page.active { display: block; }
+  .tab-btn { border-bottom: 2px solid transparent; }
+  .tab-btn.active { border-bottom-color: #2563eb; color: #2563eb; }
+  .drop-zone.drag-over { border-color: #2563eb; background: #eff6ff; }
+  .nav-link { color: #94a3b8; }
+  .nav-link:hover { background: rgba(255,255,255,0.08); color: #fff; }
+  .nav-link.active-nav { background: rgba(59,130,246,0.25); color: #fff; }
+  .nav-link.active-nav svg { color: #60a5fa; }
+  @media (max-width: 768px) {
+    #sidebar { position: fixed; z-index: 50; transform: translateX(-100%); }
+    #sidebar.open { transform: translateX(0); box-shadow: 4px 0 24px rgba(0,0,0,0.4); }
+    #main { margin-left: 0 !important; }
+    #sidebar-overlay { display: block; }
+  }
+  @media (min-width: 769px) {
+    #sidebar-overlay { display: none !important; }
+    #menu-btn { display: none !important; }
+  }
+</style>
+</head>
+<body class="bg-gray-50 text-gray-900">
+
+<!-- ========== ログイン画面 ========== -->
+<div id="login-screen" class="min-h-screen bg-gradient-to-br from-blue-900 to-blue-700 flex items-center justify-center p-4">
+  <div class="w-full max-w-md">
+    <div class="text-center mb-8">
+      <div class="inline-flex items-center justify-center w-16 h-16 bg-white rounded-2xl shadow-lg mb-4">
+        <svg class="w-9 h-9 text-blue-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+      </div>
+      <h1 class="text-2xl font-bold text-white">融資支援管理システム</h1>
+      <p class="text-blue-200 text-sm mt-1">銀行融資支援コンサルティング</p>
+    </div>
+    <div class="bg-white rounded-2xl shadow-xl p-8">
+      <h2 class="text-xl font-bold text-gray-800 mb-6">ログイン</h2>
+      <form id="login-form" class="space-y-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">メールアドレス</label>
+          <input id="login-email" type="email" required placeholder="example@company.com"
+            class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">パスワード</label>
+          <input id="login-password" type="password" required placeholder="6文字以上" minlength="6"
+            class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+        </div>
+        <div id="login-error" class="text-red-500 text-sm hidden"></div>
+        <button type="submit"
+          class="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors">
+          ログイン
+        </button>
+      </form>
+      <p class="mt-4 text-center text-xs text-gray-400">アカウントの追加はシステム管理者にお問い合わせください</p>
+    </div>
+  </div>
+</div>
+
+<!-- ========== アプリ画面 ========== -->
+<div id="app-screen" class="hidden flex h-screen overflow-hidden">
+
+  <!-- モバイルオーバーレイ -->
+  <div id="sidebar-overlay" class="hidden fixed inset-0 bg-black bg-opacity-50 z-40" onclick="closeSidebar()"></div>
+
+  <!-- サイドバー -->
+  <aside id="sidebar" class="w-60 flex flex-col h-screen shrink-0" style="background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%);">
+    <div class="px-5 py-5">
+      <div class="flex items-center gap-3">
+        <div class="w-8 h-8 rounded-lg flex items-center justify-center" style="background: linear-gradient(135deg, #3b82f6, #1d4ed8);">
+          <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        </div>
+        <div>
+          <h1 class="text-sm font-bold text-white leading-tight">融資支援管理</h1>
+          <p class="text-xs mt-0.5" style="color:#64748b;">コンサルティングシステム</p>
+        </div>
+      </div>
+    </div>
+    <div class="mx-4 mb-4 h-px" style="background:rgba(255,255,255,0.08);"></div>
+    <nav class="flex-1 px-3 space-y-1">
+      <a href="#/" class="nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm cursor-pointer transition-all" data-path="/">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+        ダッシュボード
+      </a>
+      <a href="#/clients" class="nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm cursor-pointer transition-all" data-path="/clients">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
+        顧客管理
+      </a>
+      <a href="#/cases" class="nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm cursor-pointer transition-all" data-path="/cases">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+        案件管理
+      </a>
+    </nav>
+    <div class="p-3 mx-2 mb-3 rounded-xl" style="background:rgba(255,255,255,0.05);">
+      <div class="flex items-center gap-2 px-2 py-1.5 mb-1">
+        <div class="w-6 h-6 rounded-full bg-blue-500 flex items-center justify-center text-white text-xs font-bold" id="sidebar-avatar">K</div>
+        <span id="sidebar-user" class="truncate text-xs text-slate-300"></span>
+      </div>
+      <button onclick="handleLogout()" class="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs text-slate-400 hover:text-white hover:bg-white hover:bg-opacity-10 transition-colors">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+        ログアウト
+      </button>
+    </div>
+  </aside>
+
+  <!-- メインコンテンツ -->
+  <div id="main" class="flex-1 flex flex-col overflow-hidden ml-60">
+    <!-- トップバー -->
+    <header class="bg-white border-b border-gray-100 h-14 flex items-center px-4 shrink-0 shadow-sm">
+      <button id="menu-btn" class="mr-3 p-1.5 rounded-lg text-gray-500 hover:bg-gray-100" onclick="openSidebar()">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+      </button>
+      <h2 id="page-title" class="text-base font-semibold text-gray-800 flex-1"></h2>
+      <div id="topbar-actions" class="flex items-center gap-2"></div>
+    </header>
+    <!-- ページコンテンツ -->
+    <div id="page-content" class="flex-1 overflow-auto p-4 md:p-6"></div>
+  </div>
+</div>
+
+<!-- トースト通知 -->
+<div id="toast-container" class="fixed bottom-4 right-4 z-50 space-y-2 pointer-events-none"></div>
+
+<!-- モーダル -->
+<div id="modal-overlay" class="hidden fixed inset-0 bg-black bg-opacity-40 z-40 flex items-center justify-center p-4">
+  <div id="modal-box" class="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto"></div>
+</div>
+
+<!-- ========== JavaScript ========== -->
+<script>
+// ===== Firebase設定 =====
+const firebaseConfig = {
+  apiKey: "AIzaSyDRGq-1d5nvrOtlToYd5lLcsTfosijgFzo",
+  authDomain: "consulting-37154.firebaseapp.com",
+  projectId: "consulting-37154",
+  storageBucket: "consulting-37154.firebasestorage.app",
+  messagingSenderId: "502558740127",
+  appId: "1:502558740127:web:1b01f4325585ca0e9ddcaa"
+};
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+const storage = firebase.storage();
+
+// ===== 定数 =====
+const STATUS_LIST = [
+  { id: '初回面談', color: 'bg-gray-100 text-gray-700' },
+  { id: '資料収集', color: 'bg-blue-100 text-blue-700' },
+  { id: '書類作成', color: 'bg-yellow-100 text-yellow-700' },
+  { id: '銀行提出', color: 'bg-purple-100 text-purple-700' },
+  { id: '審査中',   color: 'bg-orange-100 text-orange-700' },
+  { id: '承認',     color: 'bg-green-100 text-green-700' },
+  { id: '否決',     color: 'bg-red-100 text-red-700' },
+];
+const DEFAULT_DOCUMENTS = [
+  '決算書（直近2〜3期分）','試算表（最新月）','確定申告書','法人税申告書',
+  '会社概要・パンフレット','登記簿謄本（履歴事項全部証明書）','印鑑証明書',
+  '代表者の本人確認書類','事業計画書','資金繰り表','借入一覧表',
+  '不動産登記簿（担保がある場合）',
+];
+const MIME_ICONS = {
+  'application/pdf': '📄',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '📝',
+  'application/msword': '📝',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': '📊',
+  'application/vnd.ms-excel': '📊',
+  'image/jpeg': '🖼️', 'image/png': '🖼️',
+};
+
+// ===== ユーティリティ =====
+let currentUser = null;
+
+function toast(msg, type = 'success') {
+  const el = document.createElement('div');
+  el.className = `pointer-events-auto flex items-center gap-2 px-4 py-3 rounded-lg shadow-lg text-sm font-medium text-white ${type === 'error' ? 'bg-red-500' : 'bg-green-500'}`;
+  el.textContent = msg;
+  document.getElementById('toast-container').appendChild(el);
+  setTimeout(() => el.remove(), 3000);
+}
+
+function showModal(html) {
+  document.getElementById('modal-box').innerHTML = html;
+  document.getElementById('modal-overlay').classList.remove('hidden');
+}
+
+function closeModal() {
+  document.getElementById('modal-overlay').classList.add('hidden');
+}
+
+document.getElementById('modal-overlay').addEventListener('click', e => {
+  if (e.target === document.getElementById('modal-overlay')) closeModal();
+});
+
+function fmtDate(ts) {
+  if (!ts) return '-';
+  const d = ts.toDate ? ts.toDate() : (ts instanceof Date ? ts : new Date(ts));
+  return `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;
+}
+
+function fmtMoney(v) {
+  if (!v) return '-';
+  return Number(v).toLocaleString('ja-JP') + '万円';
+}
+
+function statusBadge(status) {
+  const s = STATUS_LIST.find(x => x.id === status) || { color: 'bg-gray-100 text-gray-700' };
+  return `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${s.color}">${status || '-'}</span>`;
+}
+
+function isNearDeadline(deadline) {
+  if (!deadline) return false;
+  const d = deadline.toDate ? deadline.toDate() : new Date(deadline);
+  const diff = (d - new Date()) / (1000*60*60*24);
+  return diff >= 0 && diff <= 7;
+}
+
+function setPageTitle(title) {
+  document.getElementById('page-title').textContent = title;
+}
+
+function setTopbarActions(html) {
+  document.getElementById('topbar-actions').innerHTML = html;
+}
+
+function updateNavActive(path) {
+  document.querySelectorAll('.nav-link').forEach(a => {
+    const p = a.dataset.path;
+    const current = path === '/' ? '/' : path;
+    const isActive = current === p || (p !== '/' && current.startsWith(p));
+    a.classList.toggle('active-nav', isActive);
+    a.classList.toggle('font-medium', isActive);
+  });
+}
+
+function openSidebar() {
+  document.getElementById('sidebar').classList.add('open');
+  document.getElementById('sidebar-overlay').classList.remove('hidden');
+}
+
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('sidebar-overlay').classList.add('hidden');
+}
+
+// ===== 認証 =====
+auth.onAuthStateChanged(user => {
+  if (user) {
+    currentUser = user;
+    document.getElementById('login-screen').classList.add('hidden');
+    document.getElementById('app-screen').classList.remove('hidden');
+    const name = user.displayName || user.email;
+    document.getElementById('sidebar-user').textContent = name;
+    const avatar = document.getElementById('sidebar-avatar');
+    if (avatar) avatar.textContent = (name || 'U')[0].toUpperCase();
+    handleRoute();
+  } else {
+    currentUser = null;
+    document.getElementById('login-screen').classList.remove('hidden');
+    document.getElementById('app-screen').classList.add('hidden');
+  }
+});
+
+document.getElementById('login-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const email = document.getElementById('login-email').value;
+  const password = document.getElementById('login-password').value;
+  const errEl = document.getElementById('login-error');
+  errEl.classList.add('hidden');
+  try {
+    await auth.signInWithEmailAndPassword(email, password);
+  } catch (err) {
+    errEl.textContent = 'メールアドレスまたはパスワードが正しくありません';
+    errEl.classList.remove('hidden');
+  }
+});
+
+async function handleLogout() {
+  await auth.signOut();
+}
+
+// ===== ルーター =====
+function navigate(path) {
+  window.location.hash = '#' + path;
+}
+
+function handleRoute() {
+  const hash = window.location.hash.slice(1) || '/';
+  updateNavActive(hash);
+  const parts = hash.split('/').filter(Boolean);
+
+  if (hash === '/' || hash === '') return renderDashboard();
+  if (hash === '/clients') return renderClients();
+  if (hash === '/cases') return renderCases();
+  if (parts[0] === 'clients' && parts[1]) return renderClientDetail(parts[1]);
+  if (parts[0] === 'cases' && parts[1]) return renderCaseDetail(parts[1]);
+  renderDashboard();
+}
+
+window.addEventListener('hashchange', handleRoute);
+
+// ===== ダッシュボード =====
+async function renderDashboard() {
+  setPageTitle('ダッシュボード');
+  setTopbarActions(`<a href="#/cases/new" class="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700">
+    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>新規案件</a>`);
+  document.getElementById('page-content').innerHTML = `<div class="flex items-center justify-center h-32 text-gray-400"><div class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div></div>`;
+
+  const [casesSnap, clientsSnap] = await Promise.all([
+    db.collection('cases').orderBy('createdAt','desc').limit(50).get(),
+    db.collection('clients').orderBy('createdAt','desc').limit(100).get(),
+  ]);
+  const cases = casesSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const clients = clientsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const now = new Date();
+
+  const inProgress = cases.filter(c => c.status !== '承認' && c.status !== '否決').length;
+  const thisMonthApproved = cases.filter(c => {
+    if (c.status !== '承認') return false;
+    const u = c.updatedAt?.toDate ? c.updatedAt.toDate() : new Date(c.updatedAt||0);
+    return u.getMonth() === now.getMonth() && u.getFullYear() === now.getFullYear();
+  }).length;
+  const soonCases = cases.filter(c => {
+    if (!c.deadline || c.status === '承認' || c.status === '否決') return false;
+    const d = c.deadline.toDate ? c.deadline.toDate() : new Date(c.deadline);
+    const diff = (d - now) / (1000*60*60*24);
+    return diff >= 0 && diff <= 7;
+  });
+
+  const statusCounts = STATUS_LIST.map(s => ({ ...s, count: cases.filter(c => c.status === s.id).length }));
+
+  // 未完了タスクを全案件から収集
+  const incompleteTasks = [];
+  cases.forEach(c => {
+    (c.tasks || []).filter(t => !t.completed).forEach(t => {
+      incompleteTasks.push({ ...t, caseId: c.id, caseTitle: c.title, clientName: c.clientName });
+    });
+  });
+  incompleteTasks.sort((a, b) => {
+    if (!a.dueDate && !b.dueDate) return 0;
+    if (!a.dueDate) return 1;
+    if (!b.dueDate) return -1;
+    return new Date(a.dueDate) - new Date(b.dueDate);
+  });
+
+  document.getElementById('page-content').innerHTML = `
+  <div class="space-y-6">
+    <div>
+      <h1 class="text-2xl font-bold text-gray-900">ダッシュボード</h1>
+      <p class="text-gray-500 text-sm mt-1">${currentUser?.displayName || currentUser?.email} さん、こんにちは</p>
+    </div>
+    <!-- サマリーカード -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+      ${[
+        { label:'総顧客数', value: clients.length, unit:'社', color:'blue' },
+        { label:'進行中案件', value: inProgress, unit:'件', color:'indigo' },
+        { label:'今月承認', value: thisMonthApproved, unit:'件', color:'green' },
+        { label:'期限7日以内', value: soonCases.length, unit:'件', color: soonCases.length > 0 ? 'red' : 'gray' },
+      ].map(c => `
+        <div class="bg-white rounded-xl border border-gray-200 p-4">
+          <p class="text-2xl font-bold text-gray-900">${c.value}<span class="text-sm font-normal text-gray-500 ml-1">${c.unit}</span></p>
+          <p class="text-xs text-gray-500 mt-1">${c.label}</p>
+        </div>`).join('')}
+    </div>
+    <!-- ステータス別 -->
+    <div class="bg-white rounded-xl border border-gray-200 p-5">
+      <h2 class="text-base font-semibold text-gray-800 mb-4">ステータス別案件数</h2>
+      <div class="grid grid-cols-3 md:grid-cols-7 gap-2">
+        ${statusCounts.map(s => `
+          <a href="#/cases?status=${encodeURIComponent(s.id)}" class="text-center p-3 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors cursor-pointer">
+            <p class="text-2xl font-bold text-gray-800">${s.count}</p>
+            <p class="text-xs text-gray-500 mt-1">${s.id}</p>
+          </a>`).join('')}
+      </div>
+    </div>
+    <!-- 未完了タスク -->
+    ${incompleteTasks.length > 0 ? `
+    <div class="bg-white rounded-xl border border-gray-200 p-5">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-base font-semibold text-gray-800">📋 未完了タスク（${incompleteTasks.length}件）</h2>
+      </div>
+      <div class="space-y-2">
+        ${incompleteTasks.slice(0,10).map(t => {
+          const isOverdue = t.dueDate && new Date(t.dueDate) < now;
+          const isDueSoon = t.dueDate && !isOverdue && (new Date(t.dueDate) - now) / (1000*60*60*24) <= 3;
+          return `<a href="#/cases/${t.caseId}" class="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 cursor-pointer border border-gray-100">
+            <div class="w-4 h-4 rounded border-2 border-gray-300 shrink-0 mt-0.5"></div>
+            <div class="flex-1 min-w-0">
+              <p class="text-sm font-medium text-gray-800 truncate">${t.title}</p>
+              <p class="text-xs text-gray-400 mt-0.5">${t.caseTitle}${t.assigneeName ? ' · ' + t.assigneeName : ''}</p>
+            </div>
+            ${t.dueDate ? `<span class="text-xs shrink-0 px-2 py-0.5 rounded-full font-medium ${isOverdue ? 'bg-red-100 text-red-700' : isDueSoon ? 'bg-orange-100 text-orange-700' : 'bg-gray-100 text-gray-500'}">${isOverdue ? '期限超過' : t.dueDate}</span>` : ''}
+          </a>`;
+        }).join('')}
+        ${incompleteTasks.length > 10 ? `<p class="text-xs text-gray-400 text-center pt-2">他 ${incompleteTasks.length - 10} 件</p>` : ''}
+      </div>
+    </div>` : ''}
+    <div class="grid md:grid-cols-2 gap-6">
+      ${soonCases.length > 0 ? `
+      <div class="bg-white rounded-xl border border-red-200 p-5">
+        <h2 class="text-base font-semibold text-red-700 mb-4">⚠️ 期限が迫っている案件</h2>
+        <div class="space-y-2">
+          ${soonCases.map(c => {
+            const d = c.deadline?.toDate ? c.deadline.toDate() : new Date(c.deadline);
+            const diff = Math.ceil((d - now) / (1000*60*60*24));
+            return `<a href="#/cases/${c.id}" class="flex items-center justify-between p-3 bg-red-50 rounded-lg hover:bg-red-100 cursor-pointer">
+              <div><p class="text-sm font-medium">${c.title}</p><p class="text-xs text-gray-500">${c.clientName}</p></div>
+              <span class="text-xs font-medium text-red-700 bg-red-100 px-2 py-1 rounded">${diff === 0 ? '今日' : `あと${diff}日`}</span>
+            </a>`;
+          }).join('')}
+        </div>
+      </div>` : ''}
+      <div class="bg-white rounded-xl border border-gray-200 p-5">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-base font-semibold text-gray-800">最近の案件</h2>
+          <a href="#/cases" class="text-xs text-blue-600 hover:text-blue-800">すべて表示 →</a>
+        </div>
+        ${cases.slice(0,5).length === 0 ? `<p class="text-sm text-gray-400 text-center py-8">案件がまだありません</p>` :
+          `<div class="space-y-2">${cases.slice(0,5).map(c => `
+            <a href="#/cases/${c.id}" class="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg cursor-pointer">
+              <div class="min-w-0"><p class="text-sm font-medium truncate">${c.title}</p><p class="text-xs text-gray-500">${c.clientName}</p></div>
+              ${statusBadge(c.status)}
+            </a>`).join('')}</div>`}
+      </div>
+    </div>
+  </div>`;
+}
+
+// ===== 顧客管理 =====
+let clientsCache = [];
+
+async function renderClients() {
+  setPageTitle('顧客管理');
+  setTopbarActions(`<button onclick="openClientModal(null)" class="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700">
+    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>顧客追加</button>`);
+  document.getElementById('page-content').innerHTML = `<div class="flex items-center justify-center h-32 text-gray-400"><div class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div></div>`;
+
+  const snap = await db.collection('clients').orderBy('createdAt','desc').get();
+  clientsCache = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  renderClientsTable('');
+}
+
+function renderClientsTable(search) {
+  const filtered = clientsCache.filter(c =>
+    !search || c.name?.includes(search) || c.industry?.includes(search) || c.representative?.includes(search)
+  );
+  document.getElementById('page-content').innerHTML = `
+  <div class="space-y-4">
+    <div class="relative max-w-sm">
+      <svg class="absolute left-3 top-2.5 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+      <input type="text" id="client-search" value="${search}" oninput="renderClientsTable(this.value)" placeholder="会社名・業種・担当者で検索"
+        class="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+    </div>
+    ${filtered.length === 0 ? `<div class="text-center py-16 text-gray-400 text-sm">${search ? '検索結果がありません' : '顧客がまだ登録されていません'}</div>` : `
+    <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      <table class="w-full text-sm">
+        <thead class="bg-gray-50 border-b border-gray-200">
+          <tr>
+            <th class="text-left px-4 py-3 font-medium text-gray-600">会社名</th>
+            <th class="text-left px-4 py-3 font-medium text-gray-600 hidden md:table-cell">業種</th>
+            <th class="text-left px-4 py-3 font-medium text-gray-600 hidden md:table-cell">代表者</th>
+            <th class="text-left px-4 py-3 font-medium text-gray-600 hidden lg:table-cell">電話番号</th>
+            <th class="text-right px-4 py-3 font-medium text-gray-600">操作</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100">
+          ${filtered.map(c => `
+          <tr class="hover:bg-gray-50">
+            <td class="px-4 py-3">
+              <a href="#/clients/${c.id}" class="font-medium text-blue-700 hover:underline">${c.name}</a>
+              <div class="text-xs text-gray-400 md:hidden">${c.industry||''}</div>
+            </td>
+            <td class="px-4 py-3 text-gray-600 hidden md:table-cell">${c.industry||'-'}</td>
+            <td class="px-4 py-3 text-gray-600 hidden md:table-cell">${c.representative||'-'}</td>
+            <td class="px-4 py-3 text-gray-600 hidden lg:table-cell">${c.phone||'-'}</td>
+            <td class="px-4 py-3 text-right">
+              <div class="flex items-center justify-end gap-2">
+                <a href="#/cases?client=${c.id}" class="text-xs text-blue-600 hover:text-blue-800 px-2 py-1 rounded hover:bg-blue-50">案件</a>
+                <button onclick="openClientModal('${c.id}')" class="text-xs text-gray-600 hover:text-gray-800 px-2 py-1 rounded hover:bg-gray-100">編集</button>
+                <button onclick="deleteClient('${c.id}','${c.name}')" class="text-xs text-red-500 hover:text-red-700 px-2 py-1 rounded hover:bg-red-50">削除</button>
+              </div>
+            </td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`}
+  </div>`;
+}
+
+function openClientModal(id) {
+  const client = id ? clientsCache.find(c => c.id === id) : null;
+  showModal(`
+  <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+    <h2 class="text-lg font-bold">${client ? '顧客情報を編集' : '顧客を追加'}</h2>
+    <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+  </div>
+  <div class="px-6 py-5 space-y-4">
+    ${field('会社名 *','name','text',client?.name||'','株式会社〇〇')}
+    ${field('業種','industry','text',client?.industry||'','製造業、飲食業など')}
+    <div class="grid grid-cols-2 gap-3">
+      ${field('役職','representativeTitle','text',client?.representativeTitle||'','代表取締役')}
+      ${field('代表者名','representative','text',client?.representative||'','山田 太郎')}
+    </div>
+    ${field('メールアドレス','email','email',client?.email||'','info@company.com')}
+    ${field('電話番号','phone','text',client?.phone||'','03-0000-0000')}
+    ${field('住所','address','text',client?.address||'','東京都〇〇区...')}
+    <div>
+      <label class="block text-sm font-medium text-gray-700 mb-1">備考</label>
+      <textarea id="field-notes" rows="3" placeholder="メモ・特記事項など"
+        class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">${client?.notes||''}</textarea>
+    </div>
+  </div>
+  <div class="flex gap-3 px-6 py-4 border-t border-gray-200">
+    <button onclick="closeModal()" class="flex-1 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50">キャンセル</button>
+    <button onclick="saveClient('${id||''}')" class="flex-1 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700">保存</button>
+  </div>`);
+}
+
+function field(label, id, type, value, placeholder) {
+  return `<div>
+    <label class="block text-sm font-medium text-gray-700 mb-1">${label}</label>
+    <input id="field-${id}" type="${type}" value="${value||''}" placeholder="${placeholder}"
+      class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+  </div>`;
+}
+
+async function saveClient(id) {
+  const name = document.getElementById('field-name').value.trim();
+  if (!name) { toast('会社名は必須です', 'error'); return; }
+  const data = {
+    name, industry: v('industry'), representative: v('representative'),
+    representativeTitle: v('representativeTitle'), email: v('email'),
+    phone: v('phone'), address: v('address'), notes: v('notes'),
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+  };
+  try {
+    if (id) {
+      await db.collection('clients').doc(id).update(data);
+      toast('顧客情報を更新しました');
+    } else {
+      data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+      await db.collection('clients').add(data);
+      toast('顧客を追加しました');
+    }
+    closeModal();
+    renderClients();
+  } catch { toast('保存に失敗しました', 'error'); }
+}
+
+async function deleteClient(id, name) {
+  if (!confirm(`「${name}」を削除しますか？`)) return;
+  try {
+    await db.collection('clients').doc(id).delete();
+    toast('削除しました');
+    renderClients();
+  } catch { toast('削除に失敗しました', 'error'); }
+}
+
+function v(id) { return document.getElementById('field-' + id)?.value || ''; }
+
+// ===== 顧客詳細 =====
+async function renderClientDetail(id) {
+  setPageTitle('顧客詳細');
+  setTopbarActions('');
+  document.getElementById('page-content').innerHTML = `<div class="flex items-center justify-center h-32"><div class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div></div>`;
+
+  const [docSnap, casesSnap] = await Promise.all([
+    db.collection('clients').doc(id).get(),
+    db.collection('cases').where('clientId','==',id).orderBy('createdAt','desc').get(),
+  ]);
+  if (!docSnap.exists) { toast('顧客が見つかりません', 'error'); navigate('/clients'); return; }
+  const client = { id: docSnap.id, ...docSnap.data() };
+  const cases = casesSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+  if (!clientsCache.length) clientsCache = [client];
+
+  setPageTitle(client.name);
+  setTopbarActions(`
+    <a href="#/cases/new?clientId=${id}&clientName=${encodeURIComponent(client.name)}" class="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 mr-2">新規案件</a>
+    <button onclick="openClientModal('${id}')" class="px-3 py-1.5 border border-gray-300 rounded-lg text-sm hover:bg-gray-50">編集</button>`);
+
+  document.getElementById('page-content').innerHTML = `
+  <div class="space-y-6">
+    <a href="#/clients" class="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>顧客一覧
+    </a>
+    <div class="bg-white rounded-xl border border-gray-200 p-6">
+      <h2 class="text-lg font-bold mb-4">${client.name}</h2>
+      <div class="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
+        ${[['業種',client.industry],['役職',client.representativeTitle],['代表者',client.representative],
+           ['メール',client.email],['電話',client.phone],['住所',client.address]].map(([l,val])=>`
+          <div><p class="text-xs text-gray-500">${l}</p><p class="mt-0.5">${val||'-'}</p></div>`).join('')}
+      </div>
+      ${client.notes ? `<div class="mt-4 pt-4 border-t border-gray-100"><p class="text-xs text-gray-500 mb-1">備考</p><p class="text-sm">${client.notes}</p></div>` : ''}
+    </div>
+    <div class="bg-white rounded-xl border border-gray-200 p-5">
+      <h2 class="text-base font-semibold mb-4">案件一覧（${cases.length}件）</h2>
+      ${cases.length === 0 ? `<p class="text-sm text-gray-400 text-center py-8">案件がまだありません</p>` : `
+      <div class="space-y-2">${cases.map(c=>`
+        <a href="#/cases/${c.id}" class="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg cursor-pointer">
+          <div><p class="text-sm font-medium">${c.title}</p><p class="text-xs text-gray-500">${fmtDate(c.deadline) !== '-' ? '期限: ' + fmtDate(c.deadline) : ''}</p></div>
+          ${statusBadge(c.status)}
+        </a>`).join('')}</div>`}
+    </div>
+  </div>`;
+}
+
+// ===== 案件一覧 =====
+let casesCache = [];
+
+async function renderCases() {
+  setPageTitle('案件管理');
+  setTopbarActions(`<a href="#/cases/new" class="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700">
+    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>新規案件</a>`);
+  document.getElementById('page-content').innerHTML = `<div class="flex items-center justify-center h-32"><div class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div></div>`;
+
+  const snap = await db.collection('cases').orderBy('createdAt','desc').get();
+  casesCache = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+  const urlStatus = new URLSearchParams(window.location.hash.split('?')[1]||'').get('status') || '';
+  const urlClient = new URLSearchParams(window.location.hash.split('?')[1]||'').get('client') || '';
+  renderCasesTable('', urlStatus, urlClient);
+}
+
+function renderCasesTable(search, statusFilter, clientFilter) {
+  const filtered = casesCache.filter(c => {
+    const ms = !search || c.title?.includes(search) || c.clientName?.includes(search) || c.bankName?.includes(search);
+    const mst = !statusFilter || c.status === statusFilter;
+    const mc = !clientFilter || c.clientId === clientFilter;
+    return ms && mst && mc;
+  });
+  document.getElementById('page-content').innerHTML = `
+  <div class="space-y-4">
+    <div class="flex flex-wrap gap-3">
+      <div class="relative flex-1 min-w-48">
+        <svg class="absolute left-3 top-2.5 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+        <input type="text" id="case-search" value="${search}" oninput="renderCasesTable(this.value,'${statusFilter}','${clientFilter}')" placeholder="案件名・顧客・銀行で検索"
+          class="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+      </div>
+      <select id="case-status-filter" onchange="renderCasesTable(document.getElementById('case-search').value,this.value,'${clientFilter}')"
+        class="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+        <option value="">すべてのステータス</option>
+        ${STATUS_LIST.map(s=>`<option value="${s.id}" ${statusFilter===s.id?'selected':''}>${s.id}</option>`).join('')}
+      </select>
+      ${statusFilter || clientFilter ? `<button onclick="renderCasesTable('','','')" class="px-3 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">フィルタ解除</button>` : ''}
+    </div>
+    <p class="text-sm text-gray-500">${filtered.length}件の案件</p>
+    ${filtered.length === 0 ? `<div class="text-center py-16 text-gray-400 text-sm">案件がありません</div>` : `
+    <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      <table class="w-full text-sm">
+        <thead class="bg-gray-50 border-b border-gray-200">
+          <tr>
+            <th class="text-left px-4 py-3 font-medium text-gray-600">案件名</th>
+            <th class="text-left px-4 py-3 font-medium text-gray-600 hidden md:table-cell">顧客名</th>
+            <th class="text-left px-4 py-3 font-medium text-gray-600 hidden lg:table-cell">融資希望額</th>
+            <th class="text-left px-4 py-3 font-medium text-gray-600 hidden lg:table-cell">申請銀行</th>
+            <th class="text-left px-4 py-3 font-medium text-gray-600">ステータス</th>
+            <th class="text-left px-4 py-3 font-medium text-gray-600 hidden md:table-cell">期限</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100">
+          ${filtered.map(c=>`
+          <tr class="hover:bg-gray-50">
+            <td class="px-4 py-3"><a href="#/cases/${c.id}" class="font-medium text-blue-700 hover:underline">${c.title}</a></td>
+            <td class="px-4 py-3 text-gray-600 hidden md:table-cell">${c.clientName||'-'}</td>
+            <td class="px-4 py-3 text-gray-600 hidden lg:table-cell">${fmtMoney(c.loanAmount)}</td>
+            <td class="px-4 py-3 text-gray-600 hidden lg:table-cell">${c.bankName||'-'}</td>
+            <td class="px-4 py-3">${statusBadge(c.status)}</td>
+            <td class="px-4 py-3 hidden md:table-cell ${isNearDeadline(c.deadline)?'text-red-600 font-medium':'text-gray-600'}">${fmtDate(c.deadline)}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`}
+  </div>`;
+}
+
+// ===== 案件詳細 =====
+let caseData = null;
+let activeTab = 'overview';
+
+async function renderCaseDetail(id) {
+  const isNew = id === 'new';
+  setTopbarActions('');
+  document.getElementById('page-content').innerHTML = `<div class="flex items-center justify-center h-32"><div class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div></div>`;
+
+  const urlParams = new URLSearchParams(window.location.hash.split('?')[1]||'');
+  const preClientId = urlParams.get('clientId') || '';
+  const preClientName = urlParams.get('clientName') || '';
+
+  const clientsSnap = await db.collection('clients').orderBy('name').get();
+  const clients = clientsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+  clientsCache = clients;
+
+  if (isNew) {
+    caseData = {
+      title: '', clientId: preClientId, clientName: preClientName,
+      loanAmount: '', loanPurpose: '', bankName: '',
+      status: '初回面談', assigneeName: currentUser?.displayName || currentUser?.email || '',
+      caseDate: new Date().toISOString().split('T')[0],
+      deadline: '', notes: '', documents: [], tasks: [],
+    };
+    if (preClientId && preClientName) {
+      await autoGenerateTitle(preClientId, preClientName);
+    }
+  } else {
+    const snap = await db.collection('cases').doc(id).get();
+    if (!snap.exists) { toast('案件が見つかりません', 'error'); navigate('/cases'); return; }
+    const d = snap.data();
+    caseData = {
+      ...d,
+      caseDate: d.caseDate || new Date().toISOString().split('T')[0],
+      deadline: d.deadline ? (d.deadline.toDate ? d.deadline.toDate().toISOString().split('T')[0] : d.deadline) : '',
+      documents: d.documents || [],
+      tasks: d.tasks || [],
+    };
+  }
+
+  activeTab = 'overview';
+  setPageTitle(isNew ? '新規案件作成' : caseData.title);
+  renderCaseDetailUI(id, clients, isNew);
+}
+
+function renderCaseDetailUI(id, clients, isNew) {
+  const isNew_ = id === 'new';
+  const submitted = caseData.documents?.filter(d=>d.submitted).length || 0;
+  const allDocs = [...DEFAULT_DOCUMENTS, ...(caseData.documents?.filter(d=>d.custom).map(d=>d.name)||[])];
+  const completedTasks = caseData.tasks?.filter(t=>t.completed).length || 0;
+
+  document.getElementById('page-content').innerHTML = `
+  <div class="space-y-5 max-w-4xl mx-auto">
+    <div class="flex items-start justify-between gap-4">
+      <div class="flex items-center gap-3">
+        <a href="#/cases" class="text-gray-400 hover:text-gray-600">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+        </a>
+        <div>
+          <h1 class="text-2xl font-bold text-gray-900">${isNew_ ? '新規案件作成' : caseData.title}</h1>
+          ${!isNew_ ? `<p class="text-sm text-gray-500">${caseData.clientName}</p>` : ''}
+        </div>
+      </div>
+      <div class="flex gap-2">
+        ${!isNew_ ? `<button onclick="deleteCase('${id}')" class="px-3 py-2 text-sm text-red-600 border border-red-200 rounded-lg hover:bg-red-50">削除</button>` : ''}
+        <button onclick="saveCase('${id}')" id="save-btn" class="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700">保存</button>
+      </div>
+    </div>
+
+    ${!isNew_ ? `
+    <!-- ステータスバー -->
+    <div class="bg-white rounded-xl border border-gray-200 p-4">
+      <p class="text-xs font-medium text-gray-500 mb-3">進捗ステータス</p>
+      <div class="flex gap-1 flex-wrap">
+        ${STATUS_LIST.map((s,i)=>{
+          const isActive = caseData.status === s.id;
+          const isDone = STATUS_LIST.findIndex(x=>x.id===caseData.status) > i;
+          return `<button onclick="setCaseStatus('${s.id}','${id}')" class="px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${isActive ? s.color+' ring-2 ring-offset-1 ring-blue-400' : isDone ? 'bg-gray-100 text-gray-400' : 'bg-gray-50 text-gray-500 hover:bg-gray-100'}">${i+1}. ${s.id}</button>`;
+        }).join('')}
+      </div>
+    </div>
+    <!-- タブ -->
+    <div class="flex border-b border-gray-200">
+      ${[
+        {id:'overview', label:'基本情報'},
+        {id:'documents', label:`書類・ファイル ${submitted}/${allDocs.length}`},
+        {id:'tasks', label:`タスク ${completedTasks}/${caseData.tasks?.length||0}`},
+      ].map(t=>`
+        <button onclick="switchTab('${t.id}','${id}')" class="tab-btn px-4 py-2.5 text-sm font-medium transition-colors ${activeTab===t.id ? 'active' : 'border-transparent text-gray-500 hover:text-gray-700'}">${t.label}</button>
+      `).join('')}
+    </div>` : ''}
+
+    <!-- タブコンテンツ -->
+    <div id="tab-content"></div>
+  </div>`;
+
+  renderTabContent(id, clients);
+}
+
+function setCaseStatus(status, id) {
+  caseData.status = status;
+  renderCaseDetailUI(id, clientsCache, false);
+}
+
+function switchTab(tab, id) {
+  activeTab = tab;
+  renderCaseDetailUI(id, clientsCache, false);
+}
+
+function renderTabContent(id, clients) {
+  const isNew_ = id === 'new';
+  const container = document.getElementById('tab-content');
+  if (!container) return;
+
+  if (isNew_ || activeTab === 'overview') {
+    container.innerHTML = `
+    <div class="bg-white rounded-xl border border-gray-200 p-6">
+      <div class="grid md:grid-cols-2 gap-5">
+        <div class="md:col-span-2">
+          <label class="block text-sm font-medium text-gray-700 mb-1">案件名<span class="ml-2 text-xs text-gray-400 font-normal">（自動生成）</span></label>
+          <input type="text" id="cd-title" value="${caseData.title||''}" readonly
+            class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-gray-50 text-gray-600 cursor-default">
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">顧客 *</label>
+          <select id="cd-clientId" onchange="handleClientChange(this.value,'${id}')"
+            class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <option value="">顧客を選択してください</option>
+            ${clients.map(c=>`<option value="${c.id}" ${caseData.clientId===c.id?'selected':''}>${c.name}</option>`).join('')}
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">ステータス</label>
+          <select id="cd-status" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+            ${STATUS_LIST.map(s=>`<option value="${s.id}" ${caseData.status===s.id?'selected':''}>${s.id}</option>`).join('')}
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">融資希望額（万円）</label>
+          <input type="number" id="cd-loanAmount" value="${caseData.loanAmount||''}" placeholder="1000"
+            class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">申請銀行</label>
+          <input type="text" id="cd-bankName" value="${caseData.bankName||''}" placeholder="〇〇銀行"
+            class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">資金使途</label>
+          <input type="text" id="cd-loanPurpose" value="${caseData.loanPurpose||''}" placeholder="設備投資、運転資金など"
+            class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">担当者</label>
+          <input type="text" id="cd-assigneeName" value="${caseData.assigneeName||''}" placeholder="担当者名"
+            class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">作成日</label>
+          <input type="date" id="cd-caseDate" value="${caseData.caseDate||''}"
+            class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">期限</label>
+          <input type="date" id="cd-deadline" value="${caseData.deadline||''}"
+            class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+        </div>
+        <div class="md:col-span-2">
+          <label class="block text-sm font-medium text-gray-700 mb-1">メモ・備考</label>
+          <textarea id="cd-notes" rows="4" placeholder="顧客との会話メモ、銀行との交渉状況など"
+            class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">${caseData.notes||''}</textarea>
+        </div>
+      </div>
+    </div>`;
+    return;
+  }
+
+  if (activeTab === 'documents') {
+    const allDocs = [...DEFAULT_DOCUMENTS, ...(caseData.documents?.filter(d=>d.custom).map(d=>d.name)||[])];
+    const submitted = caseData.documents?.filter(d=>d.submitted).length || 0;
+    container.innerHTML = `
+    <div class="bg-white rounded-xl border border-gray-200 p-6">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-base font-semibold text-gray-800">必要書類チェックリスト</h2>
+        <span class="text-sm text-gray-500">${submitted}/${allDocs.length} 提出済み</span>
+      </div>
+      <div class="w-full h-2 bg-gray-100 rounded-full mb-5">
+        <div class="h-2 bg-blue-500 rounded-full transition-all" style="width:${allDocs.length?(submitted/allDocs.length*100):0}%"></div>
+      </div>
+      <div class="space-y-1 mb-4">
+        ${allDocs.map(docName=>{
+          const item = caseData.documents?.find(d=>d.name===docName);
+          const isSubmitted = item?.submitted || false;
+          const isCustom = !DEFAULT_DOCUMENTS.includes(docName);
+          return `
+          <div class="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50">
+            <button onclick="toggleDoc('${docName.replace(/'/g,"\\'")}','${id}')"
+              class="flex-shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${isSubmitted?'bg-green-500 border-green-500':'border-gray-300 hover:border-green-400'}">
+              ${isSubmitted?'<svg class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>':''}
+            </button>
+            <span class="flex-1 text-sm ${isSubmitted?'line-through text-gray-400':'text-gray-700'}">${docName}</span>
+            ${item?.submittedAt && isSubmitted ? `<span class="text-xs text-gray-400">${new Date(item.submittedAt).toLocaleDateString('ja-JP')}</span>` : ''}
+            ${isCustom ? `<button onclick="removeCustomDoc('${docName.replace(/'/g,"\\'")}','${id}')" class="text-gray-300 hover:text-red-400 text-lg leading-none">&times;</button>` : ''}
+          </div>`;
+        }).join('')}
+      </div>
+      <div class="flex gap-2 mb-4">
+        <input type="text" id="custom-doc-input" placeholder="書類を追加（例: 見積書）" onkeydown="if(event.key==='Enter')addCustomDoc('${id}')"
+          class="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+        <button onclick="addCustomDoc('${id}')" class="px-3 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50">追加</button>
+      </div>
+      <!-- ファイルアップロード -->
+      <div class="border-t border-gray-200 pt-6">
+        <h3 class="text-base font-semibold text-gray-800 mb-4">アップロード済みファイル</h3>
+        <div id="file-upload-section"></div>
+      </div>
+    </div>`;
+    if (caseData.clientName && caseData.title) {
+      initFileUpload(caseData.clientName, caseData.title, document.getElementById('file-upload-section'));
+    } else {
+      document.getElementById('file-upload-section').innerHTML = `<p class="text-sm text-gray-400 text-center py-8">顧客名・案件名を設定してから保存してください</p>`;
+    }
+    return;
+  }
+
+  if (activeTab === 'tasks') {
+    container.innerHTML = `
+    <div class="bg-white rounded-xl border border-gray-200 p-6">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-base font-semibold text-gray-800">タスク</h2>
+        <button onclick="showAddTaskForm('${id}')" class="flex items-center gap-1.5 px-3 py-1.5 text-sm text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>タスク追加
+        </button>
+      </div>
+      <div id="task-add-form"></div>
+      ${!caseData.tasks?.length ? `<p class="text-center py-8 text-gray-400 text-sm">タスクがありません</p>` : `
+      <div class="space-y-2">
+        ${caseData.tasks.map(t=>`
+        <div class="flex items-start gap-3 p-3 rounded-lg ${t.completed?'bg-gray-50':'bg-white border border-gray-100'}">
+          <button onclick="toggleTask('${t.id}','${id}')"
+            class="mt-0.5 flex-shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center ${t.completed?'bg-green-500 border-green-500':'border-gray-300 hover:border-green-400'}">
+            ${t.completed?'<svg class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>':''}
+          </button>
+          <div class="flex-1">
+            <p class="text-sm ${t.completed?'line-through text-gray-400':'text-gray-800'}">${t.title}</p>
+            <div class="flex gap-3 mt-1">
+              ${t.dueDate?`<span class="text-xs text-gray-400">期限: ${t.dueDate}</span>`:''}
+              ${t.assigneeName?`<span class="text-xs text-gray-400">担当: ${t.assigneeName}</span>`:''}
+            </div>
+          </div>
+          <button onclick="removeTask('${t.id}','${id}')" class="text-gray-300 hover:text-red-400 text-lg leading-none">&times;</button>
+        </div>`).join('')}
+      </div>`}
+    </div>`;
+  }
+}
+
+function showAddTaskForm(id) {
+  document.getElementById('task-add-form').innerHTML = `
+  <div class="mb-4 p-4 bg-blue-50 rounded-xl border border-blue-100 space-y-3">
+    <input type="text" id="new-task-title" placeholder="タスク内容" autofocus
+      class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+    <div class="grid grid-cols-2 gap-3">
+      <input type="date" id="new-task-due" class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+      <input type="text" id="new-task-assignee" placeholder="担当者名" class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+    </div>
+    <div class="flex gap-2">
+      <button onclick="document.getElementById('task-add-form').innerHTML=''" class="flex-1 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50">キャンセル</button>
+      <button onclick="addTask('${id}')" class="flex-1 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700">追加</button>
+    </div>
+  </div>`;
+}
+
+function toggleDoc(docName, id) {
+  const docs = caseData.documents || [];
+  const existing = docs.find(d=>d.name===docName);
+  if (existing) {
+    existing.submitted = !existing.submitted;
+    existing.submittedAt = existing.submitted ? new Date().toISOString() : null;
+  } else {
+    docs.push({ name: docName, submitted: true, submittedAt: new Date().toISOString() });
+  }
+  caseData.documents = docs;
+  renderCaseDetailUI(id, clientsCache, false);
+  autoSaveField(id, 'documents', caseData.documents);
+}
+
+function addCustomDoc(id) {
+  const val = document.getElementById('custom-doc-input')?.value.trim();
+  if (!val) return;
+  caseData.documents = [...(caseData.documents||[]), { name: val, submitted: false, submittedAt: null, custom: true }];
+  renderCaseDetailUI(id, clientsCache, false);
+  autoSaveField(id, 'documents', caseData.documents);
+}
+
+function removeCustomDoc(docName, id) {
+  caseData.documents = caseData.documents.filter(d=>d.name!==docName);
+  renderCaseDetailUI(id, clientsCache, false);
+  autoSaveField(id, 'documents', caseData.documents);
+}
+
+function addTask(id) {
+  const title = document.getElementById('new-task-title')?.value.trim();
+  if (!title) { toast('タスク名を入力してください', 'error'); return; }
+  caseData.tasks = [...(caseData.tasks||[]), {
+    id: Date.now().toString(), title,
+    dueDate: document.getElementById('new-task-due')?.value || '',
+    assigneeName: document.getElementById('new-task-assignee')?.value || '',
+    completed: false, createdAt: new Date().toISOString(),
+  }];
+  renderCaseDetailUI(id, clientsCache, false);
+  autoSaveField(id, 'tasks', caseData.tasks);
+}
+
+function toggleTask(taskId, id) {
+  caseData.tasks = caseData.tasks.map(t => t.id===taskId ? {...t, completed: !t.completed} : t);
+  renderCaseDetailUI(id, clientsCache, false);
+  autoSaveField(id, 'tasks', caseData.tasks);
+}
+
+function removeTask(taskId, id) {
+  caseData.tasks = caseData.tasks.filter(t=>t.id!==taskId);
+  renderCaseDetailUI(id, clientsCache, false);
+  autoSaveField(id, 'tasks', caseData.tasks);
+}
+
+async function handleClientChange(clientId, id) {
+  const client = clientsCache.find(c=>c.id===clientId);
+  caseData.clientId = clientId;
+  caseData.clientName = client?.name || '';
+  if (id === 'new' && clientId && client?.name) {
+    await autoGenerateTitle(clientId, client.name);
+    document.getElementById('cd-title').value = caseData.title;
+  }
+}
+
+async function autoGenerateTitle(clientId, clientName) {
+  const snap = await db.collection('cases').where('clientId','==',clientId).get();
+  const nextNum = snap.size + 1;
+  caseData.title = `${clientName}_${String(nextNum).padStart(3,'0')}`;
+}
+
+function syncCaseFormData() {
+  if (document.getElementById('cd-clientId')) {
+    caseData.clientId = document.getElementById('cd-clientId')?.value || caseData.clientId;
+    caseData.status = document.getElementById('cd-status')?.value || caseData.status;
+    caseData.loanAmount = document.getElementById('cd-loanAmount')?.value || '';
+    caseData.bankName = document.getElementById('cd-bankName')?.value || '';
+    caseData.loanPurpose = document.getElementById('cd-loanPurpose')?.value || '';
+    caseData.assigneeName = document.getElementById('cd-assigneeName')?.value || '';
+    caseData.caseDate = document.getElementById('cd-caseDate')?.value || '';
+    caseData.deadline = document.getElementById('cd-deadline')?.value || '';
+    caseData.notes = document.getElementById('cd-notes')?.value || '';
+  }
+}
+
+// タスク・書類の自動保存（フィールド単位）
+async function autoSaveField(id, field, value) {
+  if (!id || id === 'new') return;
+  try {
+    await db.collection('cases').doc(id).update({
+      [field]: value,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+    showAutoSaveIndicator();
+  } catch (e) { /* サイレント失敗 */ }
+}
+
+function showAutoSaveIndicator() {
+  let el = document.getElementById('autosave-indicator');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'autosave-indicator';
+    el.style.cssText = 'position:fixed;bottom:1.5rem;left:50%;transform:translateX(-50%);background:#1e293b;color:#fff;font-size:12px;padding:6px 14px;border-radius:99px;opacity:0;transition:opacity 0.3s;pointer-events:none;z-index:9999;';
+    document.body.appendChild(el);
+  }
+  el.textContent = '✓ 自動保存しました';
+  el.style.opacity = '1';
+  clearTimeout(el._timer);
+  el._timer = setTimeout(() => { el.style.opacity = '0'; }, 1500);
+}
+
+async function saveCase(id) {
+  syncCaseFormData();
+  if (!caseData.title.trim()) { toast('案件名は必須です', 'error'); return; }
+  if (!caseData.clientId) { toast('顧客を選択してください', 'error'); return; }
+  const btn = document.getElementById('save-btn');
+  if (btn) btn.textContent = '保存中...';
+
+  const payload = {
+    ...caseData,
+    deadline: caseData.deadline ? new Date(caseData.deadline) : null,
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+  };
+  try {
+    if (id === 'new') {
+      payload.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+      const ref = await db.collection('cases').add(payload);
+      toast('案件を作成しました');
+      navigate('/cases/' + ref.id);
+    } else {
+      await db.collection('cases').doc(id).update(payload);
+      toast('保存しました');
+      if (btn) btn.textContent = '保存';
+    }
+  } catch (e) {
+    toast('保存に失敗しました: ' + e.message, 'error');
+    if (btn) btn.textContent = '保存';
+  }
+}
+
+async function deleteCase(id) {
+  if (!confirm('この案件を削除しますか？')) return;
+  try {
+    await db.collection('cases').doc(id).delete();
+    toast('削除しました');
+    navigate('/cases');
+  } catch { toast('削除に失敗しました', 'error'); }
+}
+
+// ===== ファイルアップロード（Firebase Storage）=====
+async function compressImage(file) {
+  return new Promise(resolve => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const MAX = 1280;
+      let { width, height } = img;
+      if (width > MAX || height > MAX) {
+        if (width > height) { height = Math.round(height * MAX / width); width = MAX; }
+        else { width = Math.round(width * MAX / height); height = MAX; }
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = width; canvas.height = height;
+      canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+      canvas.toBlob(resolve, 'image/jpeg', 0.7);
+      URL.revokeObjectURL(url);
+    };
+    img.src = url;
+  });
+}
+
+function fileIcon(mimeType) {
+  return MIME_ICONS[mimeType] || '📎';
+}
+
+function fmtBytes(bytes) {
+  if (!bytes) return '';
+  const n = Number(bytes);
+  if (n < 1024) return `${n} B`;
+  if (n < 1024*1024) return `${(n/1024).toFixed(1)} KB`;
+  return `${(n/1024/1024).toFixed(1)} MB`;
+}
+
+async function initFileUpload(clientName, caseName, container) {
+  container.innerHTML = `
+  <div class="space-y-4" id="fu-root">
+    <p class="text-sm text-gray-500">保存先: <span class="font-medium text-gray-700">${clientName} / ${caseName}</span></p>
+    <div id="fu-dropzone" class="drop-zone border-2 border-dashed border-gray-200 rounded-xl p-8 text-center cursor-pointer hover:border-blue-300 hover:bg-gray-50">
+      <input type="file" id="fu-input" multiple class="hidden">
+      <svg class="w-10 h-10 mx-auto text-gray-300 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
+      <p class="text-sm font-medium text-gray-600">クリックまたはドラッグ＆ドロップでアップロード</p>
+      <p class="text-xs text-gray-400 mt-1">PDF・Word・Excel・画像など</p>
+    </div>
+    <div id="fu-list"><div class="flex justify-center py-6"><div class="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div></div></div>
+  </div>`;
+
+  const dropzone = document.getElementById('fu-dropzone');
+  const input = document.getElementById('fu-input');
+
+  dropzone.addEventListener('click', () => input.click());
+  input.addEventListener('change', e => handleFiles(e.target.files, clientName, caseName));
+  dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('drag-over'); });
+  dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag-over'));
+  dropzone.addEventListener('drop', e => { e.preventDefault(); dropzone.classList.remove('drag-over'); handleFiles(e.dataTransfer.files, clientName, caseName); });
+
+  await loadFileList(clientName, caseName);
+}
+
+async function loadFileList(clientName, caseName) {
+  const listEl = document.getElementById('fu-list');
+  if (!listEl) return;
+  try {
+    const ref = storage.ref(`${clientName}/${caseName}`);
+    const result = await ref.listAll();
+    if (result.items.length === 0) {
+      listEl.innerHTML = `<p class="text-center py-6 text-gray-400 text-sm">まだファイルがありません</p>`;
+      return;
+    }
+    const files = await Promise.all(result.items.map(async item => {
+      const meta = await item.getMetadata();
+      const url = await item.getDownloadURL();
+      return { name: item.name, fullPath: item.fullPath, url, size: meta.size, contentType: meta.contentType, timeCreated: meta.timeCreated };
+    }));
+    files.sort((a,b) => new Date(b.timeCreated) - new Date(a.timeCreated));
+    listEl.innerHTML = `
+    <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      ${files.map(f=>`
+      <div class="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 border-b border-gray-100 last:border-0">
+        <span class="text-xl flex-shrink-0">${fileIcon(f.contentType)}</span>
+        <div class="min-w-0 flex-1">
+          <a href="${f.url}" target="_blank" rel="noopener noreferrer" class="text-sm font-medium text-blue-700 hover:underline truncate block">${f.name}</a>
+          <p class="text-xs text-gray-400 mt-0.5">${fmtBytes(f.size)}${f.size&&f.timeCreated?' · ':''}${f.timeCreated?new Date(f.timeCreated).toLocaleDateString('ja-JP'):''}</p>
+        </div>
+        <a href="${f.url}&response-content-disposition=attachment" target="_blank" class="text-gray-300 hover:text-blue-500 p-1" title="ダウンロード">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+        </a>
+        <button onclick="deleteStorageFile('${f.fullPath}','${clientName}','${caseName}')" class="text-gray-300 hover:text-red-500 p-1" title="削除">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+        </button>
+      </div>`).join('')}
+    </div>`;
+  } catch (e) {
+    listEl.innerHTML = `<p class="text-center py-6 text-red-400 text-sm">ファイル一覧の取得に失敗しました</p>`;
+  }
+}
+
+async function handleFiles(fileList, clientName, caseName) {
+  const files = Array.from(fileList);
+  if (!files.length) return;
+  const dropzone = document.getElementById('fu-dropzone');
+  if (dropzone) dropzone.innerHTML = `<div class="flex flex-col items-center gap-2"><div class="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div><p class="text-sm text-blue-600 font-medium">アップロード中...</p></div>`;
+
+  let success = 0;
+  for (const file of files) {
+    try {
+      let uploadFile = file;
+      if (file.type === 'image/jpeg' || file.type === 'image/png') {
+        const blob = await compressImage(file);
+        uploadFile = new File([blob], file.name, { type: 'image/jpeg' });
+      }
+      const path = `${clientName}/${caseName}/${file.name}`;
+      await storage.ref(path).put(uploadFile);
+      success++;
+    } catch (e) {
+      toast(`「${file.name}」のアップロードに失敗しました`, 'error');
+    }
+  }
+  if (success > 0) toast(`${success}件のファイルをアップロードしました`);
+
+  if (dropzone) {
+    dropzone.innerHTML = `
+    <input type="file" id="fu-input" multiple class="hidden">
+    <svg class="w-10 h-10 mx-auto text-gray-300 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
+    <p class="text-sm font-medium text-gray-600">クリックまたはドラッグ＆ドロップでアップロード</p>
+    <p class="text-xs text-gray-400 mt-1">PDF・Word・Excel・画像など</p>`;
+    const newInput = document.getElementById('fu-input');
+    dropzone.addEventListener('click', () => newInput.click());
+    newInput.addEventListener('change', e => handleFiles(e.target.files, clientName, caseName));
+  }
+  await loadFileList(clientName, caseName);
+}
+
+async function deleteStorageFile(fullPath, clientName, caseName) {
+  const name = fullPath.split('/').pop();
+  if (!confirm(`「${name}」を削除しますか？`)) return;
+  try {
+    await storage.ref(fullPath).delete();
+    toast('ファイルを削除しました');
+    await loadFileList(clientName, caseName);
+  } catch { toast('削除に失敗しました', 'error'); }
+}
+
+// ===== 初期化 =====
+window.addEventListener('hashchange', handleRoute);
+</script>
+</body>
+</html>
+                                                                            
