@@ -183,6 +183,12 @@ const MIME_ICONS = {
 // ===== ユーティリティ =====
 let currentUser = null;
 
+// HTML 特殊文字をエスケープ（XSS 対策）
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g,
+    c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
 function toast(msg, type = 'success') {
   const el = document.createElement('div');
   el.className = `pointer-events-auto flex items-center gap-2 px-4 py-3 rounded-lg shadow-lg text-sm font-medium text-white ${type === 'error' ? 'bg-red-500' : 'bg-green-500'}`;
