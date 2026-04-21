@@ -338,7 +338,7 @@ async function renderDashboard() {
   }).length;
   const soonCases = cases.filter(c => {
     if (!c.deadline || c.status === '承認' || c.status === '否決') return false;
-    const d = c.deadline.toDate ? c.deadline.toDate() : new Date(c.deadline);
+    const d = c.deadline?.toDate ? c.deadline.toDate() : new Date(c.deadline);
     const diff = (d - now) / (1000*60*60*24);
     return diff >= 0 && diff <= 7;
   });
@@ -560,7 +560,7 @@ async function saveClient(id) {
     }
     closeModal();
     renderClients();
-  } catch { toast('保存に失敗しました', 'error'); }
+  } catch (e) { console.error('saveClient failed:', e); toast('保存に失敗しました', 'error'); }
 }
 
 async function deleteClient(id, name) {
@@ -569,7 +569,7 @@ async function deleteClient(id, name) {
     await db.collection('clients').doc(id).delete();
     toast('削除しました');
     renderClients();
-  } catch { toast('削除に失敗しました', 'error'); }
+  } catch (e) { console.error('deleteClient failed:', e); toast('削除に失敗しました', 'error'); }
 }
 
 function v(id) { return document.getElementById('field-' + id)?.value || ''; }
@@ -1055,7 +1055,7 @@ async function autoSaveField(id, field, value) {
       updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
     });
     showAutoSaveIndicator();
-  } catch (e) { /* サイレント失敗 */ }
+  } catch (e) { console.error('autoSave failed:', e); }
 }
 
 function showAutoSaveIndicator() {
@@ -1107,7 +1107,7 @@ async function deleteCase(id) {
     await db.collection('cases').doc(id).delete();
     toast('削除しました');
     navigate('/cases');
-  } catch { toast('削除に失敗しました', 'error'); }
+  } catch (e) { console.error('deleteCase failed:', e); toast('削除に失敗しました', 'error'); }
 }
 
 // ===== ファイルアップロード（Firebase Storage）=====
@@ -1250,7 +1250,7 @@ async function deleteStorageFile(fullPath, clientName, caseName) {
     await storage.ref(fullPath).delete();
     toast('ファイルを削除しました');
     await loadFileList(clientName, caseName);
-  } catch { toast('削除に失敗しました', 'error'); }
+  } catch (e) { console.error('deleteStorageFile failed:', e); toast('削除に失敗しました', 'error'); }
 }
 
 // ===== 初期化 =====
