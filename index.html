@@ -819,6 +819,7 @@ function renderCaseDetailUI(id, clients, isNew) {
         {id:'overview', label:'基本情報'},
         {id:'documents', label:`書類・ファイル ${submitted}/${allDocs.length}`},
         {id:'tasks', label:`タスク ${completedTasks}/${caseData.tasks?.length||0}`},
+        {id:'logs', label:'活動ログ'},
       ].map(t=>`
         <button onclick="switchTab('${t.id}','${id}')" class="tab-btn px-4 py-2.5 text-sm font-medium transition-colors ${activeTab===t.id ? 'active' : 'border-transparent text-gray-500 hover:text-gray-700'}">${t.label}</button>
       `).join('')}
@@ -832,8 +833,12 @@ function renderCaseDetailUI(id, clients, isNew) {
 }
 
 function setCaseStatus(status, id) {
+  if (caseData.status === status) return;
+  const prev = caseData.status;
   caseData.status = status;
   renderCaseDetailUI(id, clientsCache, false);
+  autoSaveField(id, 'status', status);
+  logActivity(id, `ステータスを「${prev}」→「${status}」に変更`);
 }
 
 function switchTab(tab, id) {
@@ -986,6 +991,16 @@ function renderTabContent(id, clients) {
         </div>`).join('')}
       </div>`}
     </div>`;
+    return;
+  }
+
+  if (activeTab === 'logs') {
+    container.innerHTML = `
+    <div class="bg-white rounded-xl border border-gray-200 p-6">
+      <h2 class="text-base font-semibold text-gray-800 mb-4">活動ログ</h2>
+      <div id="logs-list"><div class="flex justify-center py-8"><div class="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div></div></div>
+    </div>`;
+    loadActivityLogs(id);
   }
 }
 
@@ -1044,18 +1059,23 @@ function addTask(id) {
   }];
   renderCaseDetailUI(id, clientsCache, false);
   autoSaveField(id, 'tasks', caseData.tasks);
+  logActivity(id, `タスク「${title}」を追加`);
 }
 
 function toggleTask(taskId, id) {
+  const task = caseData.tasks.find(t => t.id === taskId);
   caseData.tasks = caseData.tasks.map(t => t.id===taskId ? {...t, completed: !t.completed} : t);
   renderCaseDetailUI(id, clientsCache, false);
   autoSaveField(id, 'tasks', caseData.tasks);
+  if (task) logActivity(id, `タスク「${task.title}」を${task.completed ? '未完了に戻す' : '完了'}`);
 }
 
 function removeTask(taskId, id) {
+  const task = caseData.tasks.find(t => t.id === taskId);
   caseData.tasks = caseData.tasks.filter(t=>t.id!==taskId);
   renderCaseDetailUI(id, clientsCache, false);
   autoSaveField(id, 'tasks', caseData.tasks);
+  if (task) logActivity(id, `タスク「${task.title}」を削除`);
 }
 
 async function handleClientChange(clientId, id) {
@@ -1114,6 +1134,50 @@ function showAutoSaveIndicator() {
   el._timer = setTimeout(() => { el.style.opacity = '0'; }, 1500);
 }
 
+// ===== 活動ログ =====
+async function logActivity(caseId, description) {
+  if (!caseId || caseId === 'new') return;
+  try {
+    await db.collection('activityLogs').add({
+      caseId,
+      description,
+      userId: currentUser?.uid || '',
+      userEmail: currentUser?.email || '',
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+  } catch (e) { console.error('logActivity failed:', e); }
+}
+
+async function loadActivityLogs(caseId) {
+  const el = document.getElementById('logs-list');
+  if (!el) return;
+  try {
+    const snap = await db.collection('activityLogs').where('caseId', '==', caseId).get();
+    const logs = snap.docs.map(d => d.data()).sort((a, b) => {
+      return (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0);
+    }).slice(0, 50);
+    if (!logs.length) {
+      el.innerHTML = '<p class="text-sm text-gray-400 text-center py-8">活動ログがありません</p>';
+      return;
+    }
+    el.innerHTML = `<div class="space-y-3">
+      ${logs.map(log => {
+        const dt = log.createdAt?.toDate ? log.createdAt.toDate() : new Date();
+        return `<div class="flex gap-3">
+          <div class="w-2 h-2 rounded-full bg-blue-400 mt-1.5 shrink-0"></div>
+          <div class="flex-1 pb-3 border-b border-gray-100 last:border-0">
+            <p class="text-sm text-gray-800">${esc(log.description)}</p>
+            <p class="text-xs text-gray-400 mt-0.5">${esc(log.userEmail)} · ${dt.toLocaleString('ja-JP')}</p>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>`;
+  } catch (e) {
+    console.error('loadActivityLogs failed:', e);
+    el.innerHTML = '<p class="text-sm text-red-400 text-center py-8">ログの取得に失敗しました</p>';
+  }
+}
+
 async function saveCase(id) {
   syncCaseFormData();
   if (!caseData.title.trim()) { toast('案件名は必須です', 'error'); return; }
@@ -1133,10 +1197,12 @@ async function saveCase(id) {
     if (id === 'new') {
       payload.createdAt = firebase.firestore.FieldValue.serverTimestamp();
       const ref = await db.collection('cases').add(payload);
+      logActivity(ref.id, `案件「${caseData.title}」を作成`);
       toast('案件を作成しました');
       navigate('/cases/' + ref.id);
     } else {
       await db.collection('cases').doc(id).update(payload);
+      logActivity(id, `案件情報を更新`);
       toast('保存しました');
       if (btn) btn.textContent = '保存';
     }
