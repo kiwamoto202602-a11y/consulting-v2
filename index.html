@@ -224,6 +224,16 @@ function statusBadge(status) {
   return `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${s.color}">${esc(status || '-')}</span>`;
 }
 
+function downloadCSV(rows, filename) {
+  const escape = v => `"${String(v??'').replace(/"/g,'""')}"`;
+  const csv = '﻿' + rows.map(r => r.map(escape).join(',')).join('\r\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
 function isNearDeadline(deadline) {
   if (!deadline) return false;
   const d = deadline.toDate ? deadline.toDate() : new Date(deadline);
@@ -447,8 +457,13 @@ let clientsCache = [];
 
 async function renderClients() {
   setPageTitle('顧客管理');
-  setTopbarActions(`<button onclick="openClientModal(null)" class="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700">
-    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>顧客追加</button>`);
+  setTopbarActions(`
+    <button onclick="exportClientsCSV()" class="flex items-center gap-1.5 px-3 py-1.5 border border-gray-300 text-sm text-gray-600 rounded-lg hover:bg-gray-50">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>CSV
+    </button>
+    <button onclick="openClientModal(null)" class="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>顧客追加
+    </button>`);
   document.getElementById('page-content').innerHTML = `<div class="flex items-center justify-center h-32 text-gray-400"><div class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div></div>`;
 
   const snap = await db.collection('clients').orderBy('createdAt','desc').get();
@@ -576,6 +591,16 @@ async function deleteClient(id, name) {
 
 function v(id) { return document.getElementById('field-' + id)?.value || ''; }
 
+function exportClientsCSV() {
+  const headers = ['会社名','業種','役職','代表者名','メール','電話','住所','備考','登録日'];
+  const rows = clientsCache.map(c => [
+    c.name, c.industry, c.representativeTitle, c.representative,
+    c.email, c.phone, c.address, c.notes,
+    c.createdAt ? fmtDate(c.createdAt) : '',
+  ]);
+  downloadCSV([headers, ...rows], `顧客一覧_${new Date().toISOString().split('T')[0]}.csv`);
+}
+
 // ===== 顧客詳細 =====
 async function renderClientDetail(id) {
   setPageTitle('顧客詳細');
@@ -627,8 +652,13 @@ let casesCache = [];
 
 async function renderCases() {
   setPageTitle('案件管理');
-  setTopbarActions(`<a href="#/cases/new" class="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700">
-    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>新規案件</a>`);
+  setTopbarActions(`
+    <button onclick="exportCasesCSV()" class="flex items-center gap-1.5 px-3 py-1.5 border border-gray-300 text-sm text-gray-600 rounded-lg hover:bg-gray-50">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>CSV
+    </button>
+    <a href="#/cases/new" class="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>新規案件
+    </a>`);
   document.getElementById('page-content').innerHTML = `<div class="flex items-center justify-center h-32"><div class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div></div>`;
 
   const snap = await db.collection('cases').orderBy('createdAt','desc').get();
@@ -689,6 +719,16 @@ function renderCasesTable(search, statusFilter, clientFilter) {
       </table>
     </div>`}
   </div>`;
+}
+
+function exportCasesCSV() {
+  const headers = ['案件名','顧客名','ステータス','申請銀行','融資希望額(万円)','期限','担当者','作成日'];
+  const rows = casesCache.map(c => [
+    c.title, c.clientName, c.status, c.bankName,
+    c.loanAmount || '', fmtDate(c.deadline), c.assigneeName || '',
+    c.createdAt ? fmtDate(c.createdAt) : '',
+  ]);
+  downloadCSV([headers, ...rows], `案件一覧_${new Date().toISOString().split('T')[0]}.csv`);
 }
 
 // ===== 案件詳細 =====
