@@ -183,6 +183,10 @@ const MIME_ICONS = {
 // ===== ユーティリティ =====
 let currentUser = null;
 
+function esc(s) {
+  return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
 function toast(msg, type = 'success') {
   const el = document.createElement('div');
   el.className = `pointer-events-auto flex items-center gap-2 px-4 py-3 rounded-lg shadow-lg text-sm font-medium text-white ${type === 'error' ? 'bg-red-500' : 'bg-green-500'}`;
@@ -217,7 +221,7 @@ function fmtMoney(v) {
 
 function statusBadge(status) {
   const s = STATUS_LIST.find(x => x.id === status) || { color: 'bg-gray-100 text-gray-700' };
-  return `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${s.color}">${status || '-'}</span>`;
+  return `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${s.color}">${esc(status || '-')}</span>`;
 }
 
 function isNearDeadline(deadline) {
@@ -359,7 +363,7 @@ async function renderDashboard() {
   <div class="space-y-6">
     <div>
       <h1 class="text-2xl font-bold text-gray-900">ダッシュボード</h1>
-      <p class="text-gray-500 text-sm mt-1">${currentUser?.displayName || currentUser?.email} さん、こんにちは</p>
+      <p class="text-gray-500 text-sm mt-1">${esc(currentUser?.displayName || currentUser?.email)} さん、こんにちは</p>
     </div>
     <!-- サマリーカード -->
     <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -398,10 +402,10 @@ async function renderDashboard() {
           return `<a href="#/cases/${t.caseId}" class="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 cursor-pointer border border-gray-100">
             <div class="w-4 h-4 rounded border-2 border-gray-300 shrink-0 mt-0.5"></div>
             <div class="flex-1 min-w-0">
-              <p class="text-sm font-medium text-gray-800 truncate">${t.title}</p>
-              <p class="text-xs text-gray-400 mt-0.5">${t.caseTitle}${t.assigneeName ? ' · ' + t.assigneeName : ''}</p>
+              <p class="text-sm font-medium text-gray-800 truncate">${esc(t.title)}</p>
+              <p class="text-xs text-gray-400 mt-0.5">${esc(t.caseTitle)}${t.assigneeName ? ' · ' + esc(t.assigneeName) : ''}</p>
             </div>
-            ${t.dueDate ? `<span class="text-xs shrink-0 px-2 py-0.5 rounded-full font-medium ${isOverdue ? 'bg-red-100 text-red-700' : isDueSoon ? 'bg-orange-100 text-orange-700' : 'bg-gray-100 text-gray-500'}">${isOverdue ? '期限超過' : t.dueDate}</span>` : ''}
+            ${t.dueDate ? `<span class="text-xs shrink-0 px-2 py-0.5 rounded-full font-medium ${isOverdue ? 'bg-red-100 text-red-700' : isDueSoon ? 'bg-orange-100 text-orange-700' : 'bg-gray-100 text-gray-500'}">${isOverdue ? '期限超過' : esc(t.dueDate)}</span>` : ''}
           </a>`;
         }).join('')}
         ${incompleteTasks.length > 10 ? `<p class="text-xs text-gray-400 text-center pt-2">他 ${incompleteTasks.length - 10} 件</p>` : ''}
@@ -416,7 +420,7 @@ async function renderDashboard() {
             const d = c.deadline?.toDate ? c.deadline.toDate() : new Date(c.deadline);
             const diff = Math.ceil((d - now) / (1000*60*60*24));
             return `<a href="#/cases/${c.id}" class="flex items-center justify-between p-3 bg-red-50 rounded-lg hover:bg-red-100 cursor-pointer">
-              <div><p class="text-sm font-medium">${c.title}</p><p class="text-xs text-gray-500">${c.clientName}</p></div>
+              <div><p class="text-sm font-medium">${esc(c.title)}</p><p class="text-xs text-gray-500">${esc(c.clientName)}</p></div>
               <span class="text-xs font-medium text-red-700 bg-red-100 px-2 py-1 rounded">${diff === 0 ? '今日' : `あと${diff}日`}</span>
             </a>`;
           }).join('')}
@@ -430,7 +434,7 @@ async function renderDashboard() {
         ${cases.slice(0,5).length === 0 ? `<p class="text-sm text-gray-400 text-center py-8">案件がまだありません</p>` :
           `<div class="space-y-2">${cases.slice(0,5).map(c => `
             <a href="#/cases/${c.id}" class="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg cursor-pointer">
-              <div class="min-w-0"><p class="text-sm font-medium truncate">${c.title}</p><p class="text-xs text-gray-500">${c.clientName}</p></div>
+              <div class="min-w-0"><p class="text-sm font-medium truncate">${esc(c.title)}</p><p class="text-xs text-gray-500">${esc(c.clientName)}</p></div>
               ${statusBadge(c.status)}
             </a>`).join('')}</div>`}
       </div>
@@ -460,7 +464,7 @@ function renderClientsTable(search) {
   <div class="space-y-4">
     <div class="relative max-w-sm">
       <svg class="absolute left-3 top-2.5 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-      <input type="text" id="client-search" value="${search}" oninput="renderClientsTable(this.value)" placeholder="会社名・業種・担当者で検索"
+      <input type="text" id="client-search" value="${esc(search)}" oninput="renderClientsTable(this.value)" placeholder="会社名・業種・担当者で検索"
         class="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
     </div>
     ${filtered.length === 0 ? `<div class="text-center py-16 text-gray-400 text-sm">${search ? '検索結果がありません' : '顧客がまだ登録されていません'}</div>` : `
@@ -479,17 +483,17 @@ function renderClientsTable(search) {
           ${filtered.map(c => `
           <tr class="hover:bg-gray-50">
             <td class="px-4 py-3">
-              <a href="#/clients/${c.id}" class="font-medium text-blue-700 hover:underline">${c.name}</a>
-              <div class="text-xs text-gray-400 md:hidden">${c.industry||''}</div>
+              <a href="#/clients/${c.id}" class="font-medium text-blue-700 hover:underline">${esc(c.name)}</a>
+              <div class="text-xs text-gray-400 md:hidden">${esc(c.industry||'')}</div>
             </td>
-            <td class="px-4 py-3 text-gray-600 hidden md:table-cell">${c.industry||'-'}</td>
-            <td class="px-4 py-3 text-gray-600 hidden md:table-cell">${c.representative||'-'}</td>
-            <td class="px-4 py-3 text-gray-600 hidden lg:table-cell">${c.phone||'-'}</td>
+            <td class="px-4 py-3 text-gray-600 hidden md:table-cell">${esc(c.industry||'-')}</td>
+            <td class="px-4 py-3 text-gray-600 hidden md:table-cell">${esc(c.representative||'-')}</td>
+            <td class="px-4 py-3 text-gray-600 hidden lg:table-cell">${esc(c.phone||'-')}</td>
             <td class="px-4 py-3 text-right">
               <div class="flex items-center justify-end gap-2">
                 <a href="#/cases?client=${c.id}" class="text-xs text-blue-600 hover:text-blue-800 px-2 py-1 rounded hover:bg-blue-50">案件</a>
                 <button onclick="openClientModal('${c.id}')" class="text-xs text-gray-600 hover:text-gray-800 px-2 py-1 rounded hover:bg-gray-100">編集</button>
-                <button onclick="deleteClient('${c.id}','${c.name}')" class="text-xs text-red-500 hover:text-red-700 px-2 py-1 rounded hover:bg-red-50">削除</button>
+                <button onclick="deleteClient('${c.id}',${esc(JSON.stringify(c.name))})" class="text-xs text-red-500 hover:text-red-700 px-2 py-1 rounded hover:bg-red-50">削除</button>
               </div>
             </td>
           </tr>`).join('')}
@@ -519,7 +523,7 @@ function openClientModal(id) {
     <div>
       <label class="block text-sm font-medium text-gray-700 mb-1">備考</label>
       <textarea id="field-notes" rows="3" placeholder="メモ・特記事項など"
-        class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">${client?.notes||''}</textarea>
+        class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">${esc(client?.notes||'')}</textarea>
     </div>
   </div>
   <div class="flex gap-3 px-6 py-4 border-t border-gray-200">
@@ -531,7 +535,7 @@ function openClientModal(id) {
 function field(label, id, type, value, placeholder) {
   return `<div>
     <label class="block text-sm font-medium text-gray-700 mb-1">${label}</label>
-    <input id="field-${id}" type="${type}" value="${value||''}" placeholder="${placeholder}"
+    <input id="field-${id}" type="${type}" value="${esc(value||'')}" placeholder="${placeholder}"
       class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
   </div>`;
 }
@@ -596,20 +600,20 @@ async function renderClientDetail(id) {
       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>顧客一覧
     </a>
     <div class="bg-white rounded-xl border border-gray-200 p-6">
-      <h2 class="text-lg font-bold mb-4">${client.name}</h2>
+      <h2 class="text-lg font-bold mb-4">${esc(client.name)}</h2>
       <div class="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
         ${[['業種',client.industry],['役職',client.representativeTitle],['代表者',client.representative],
            ['メール',client.email],['電話',client.phone],['住所',client.address]].map(([l,val])=>`
-          <div><p class="text-xs text-gray-500">${l}</p><p class="mt-0.5">${val||'-'}</p></div>`).join('')}
+          <div><p class="text-xs text-gray-500">${l}</p><p class="mt-0.5">${esc(val)||'-'}</p></div>`).join('')}
       </div>
-      ${client.notes ? `<div class="mt-4 pt-4 border-t border-gray-100"><p class="text-xs text-gray-500 mb-1">備考</p><p class="text-sm">${client.notes}</p></div>` : ''}
+      ${client.notes ? `<div class="mt-4 pt-4 border-t border-gray-100"><p class="text-xs text-gray-500 mb-1">備考</p><p class="text-sm">${esc(client.notes)}</p></div>` : ''}
     </div>
     <div class="bg-white rounded-xl border border-gray-200 p-5">
       <h2 class="text-base font-semibold mb-4">案件一覧（${cases.length}件）</h2>
       ${cases.length === 0 ? `<p class="text-sm text-gray-400 text-center py-8">案件がまだありません</p>` : `
       <div class="space-y-2">${cases.map(c=>`
         <a href="#/cases/${c.id}" class="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg cursor-pointer">
-          <div><p class="text-sm font-medium">${c.title}</p><p class="text-xs text-gray-500">${fmtDate(c.deadline) !== '-' ? '期限: ' + fmtDate(c.deadline) : ''}</p></div>
+          <div><p class="text-sm font-medium">${esc(c.title)}</p><p class="text-xs text-gray-500">${fmtDate(c.deadline) !== '-' ? '期限: ' + fmtDate(c.deadline) : ''}</p></div>
           ${statusBadge(c.status)}
         </a>`).join('')}</div>`}
     </div>
@@ -645,7 +649,7 @@ function renderCasesTable(search, statusFilter, clientFilter) {
     <div class="flex flex-wrap gap-3">
       <div class="relative flex-1 min-w-48">
         <svg class="absolute left-3 top-2.5 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-        <input type="text" id="case-search" value="${search}" oninput="renderCasesTable(this.value,'${statusFilter}','${clientFilter}')" placeholder="案件名・顧客・銀行で検索"
+        <input type="text" id="case-search" value="${esc(search)}" oninput="renderCasesTable(this.value,'${statusFilter}','${clientFilter}')" placeholder="案件名・顧客・銀行で検索"
           class="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
       </div>
       <select id="case-status-filter" onchange="renderCasesTable(document.getElementById('case-search').value,this.value,'${clientFilter}')"
@@ -672,10 +676,10 @@ function renderCasesTable(search, statusFilter, clientFilter) {
         <tbody class="divide-y divide-gray-100">
           ${filtered.map(c=>`
           <tr class="hover:bg-gray-50">
-            <td class="px-4 py-3"><a href="#/cases/${c.id}" class="font-medium text-blue-700 hover:underline">${c.title}</a></td>
-            <td class="px-4 py-3 text-gray-600 hidden md:table-cell">${c.clientName||'-'}</td>
+            <td class="px-4 py-3"><a href="#/cases/${c.id}" class="font-medium text-blue-700 hover:underline">${esc(c.title)}</a></td>
+            <td class="px-4 py-3 text-gray-600 hidden md:table-cell">${esc(c.clientName||'-')}</td>
             <td class="px-4 py-3 text-gray-600 hidden lg:table-cell">${fmtMoney(c.loanAmount)}</td>
-            <td class="px-4 py-3 text-gray-600 hidden lg:table-cell">${c.bankName||'-'}</td>
+            <td class="px-4 py-3 text-gray-600 hidden lg:table-cell">${esc(c.bankName||'-')}</td>
             <td class="px-4 py-3">${statusBadge(c.status)}</td>
             <td class="px-4 py-3 hidden md:table-cell ${isNearDeadline(c.deadline)?'text-red-600 font-medium':'text-gray-600'}">${fmtDate(c.deadline)}</td>
           </tr>`).join('')}
@@ -745,8 +749,8 @@ function renderCaseDetailUI(id, clients, isNew) {
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
         </a>
         <div>
-          <h1 class="text-2xl font-bold text-gray-900">${isNew_ ? '新規案件作成' : caseData.title}</h1>
-          ${!isNew_ ? `<p class="text-sm text-gray-500">${caseData.clientName}</p>` : ''}
+          <h1 class="text-2xl font-bold text-gray-900">${isNew_ ? '新規案件作成' : esc(caseData.title)}</h1>
+          ${!isNew_ ? `<p class="text-sm text-gray-500">${esc(caseData.clientName)}</p>` : ''}
         </div>
       </div>
       <div class="flex gap-2">
@@ -806,7 +810,7 @@ function renderTabContent(id, clients) {
       <div class="grid md:grid-cols-2 gap-5">
         <div class="md:col-span-2">
           <label class="block text-sm font-medium text-gray-700 mb-1">案件名<span class="ml-2 text-xs text-gray-400 font-normal">（自動生成）</span></label>
-          <input type="text" id="cd-title" value="${caseData.title||''}" readonly
+          <input type="text" id="cd-title" value="${esc(caseData.title||'')}" readonly
             class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-gray-50 text-gray-600 cursor-default">
         </div>
         <div>
@@ -814,7 +818,7 @@ function renderTabContent(id, clients) {
           <select id="cd-clientId" onchange="handleClientChange(this.value,'${id}')"
             class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
             <option value="">顧客を選択してください</option>
-            ${clients.map(c=>`<option value="${c.id}" ${caseData.clientId===c.id?'selected':''}>${c.name}</option>`).join('')}
+            ${clients.map(c=>`<option value="${c.id}" ${caseData.clientId===c.id?'selected':''}>${esc(c.name)}</option>`).join('')}
           </select>
         </div>
         <div>
@@ -825,38 +829,38 @@ function renderTabContent(id, clients) {
         </div>
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-1">融資希望額（万円）</label>
-          <input type="number" id="cd-loanAmount" value="${caseData.loanAmount||''}" placeholder="1000"
+          <input type="number" id="cd-loanAmount" value="${esc(caseData.loanAmount||'')}" placeholder="1000"
             class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
         </div>
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-1">申請銀行</label>
-          <input type="text" id="cd-bankName" value="${caseData.bankName||''}" placeholder="〇〇銀行"
+          <input type="text" id="cd-bankName" value="${esc(caseData.bankName||'')}" placeholder="〇〇銀行"
             class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
         </div>
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-1">資金使途</label>
-          <input type="text" id="cd-loanPurpose" value="${caseData.loanPurpose||''}" placeholder="設備投資、運転資金など"
+          <input type="text" id="cd-loanPurpose" value="${esc(caseData.loanPurpose||'')}" placeholder="設備投資、運転資金など"
             class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
         </div>
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-1">担当者</label>
-          <input type="text" id="cd-assigneeName" value="${caseData.assigneeName||''}" placeholder="担当者名"
+          <input type="text" id="cd-assigneeName" value="${esc(caseData.assigneeName||'')}" placeholder="担当者名"
             class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
         </div>
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-1">作成日</label>
-          <input type="date" id="cd-caseDate" value="${caseData.caseDate||''}"
+          <input type="date" id="cd-caseDate" value="${esc(caseData.caseDate||'')}"
             class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
         </div>
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-1">期限</label>
-          <input type="date" id="cd-deadline" value="${caseData.deadline||''}"
+          <input type="date" id="cd-deadline" value="${esc(caseData.deadline||'')}"
             class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
         </div>
         <div class="md:col-span-2">
           <label class="block text-sm font-medium text-gray-700 mb-1">メモ・備考</label>
           <textarea id="cd-notes" rows="4" placeholder="顧客との会話メモ、銀行との交渉状況など"
-            class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">${caseData.notes||''}</textarea>
+            class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">${esc(caseData.notes||'')}</textarea>
         </div>
       </div>
     </div>`;
@@ -882,13 +886,13 @@ function renderTabContent(id, clients) {
           const isCustom = !DEFAULT_DOCUMENTS.includes(docName);
           return `
           <div class="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50">
-            <button onclick="toggleDoc('${docName.replace(/'/g,"\\'")}','${id}')"
+            <button onclick="toggleDoc(${esc(JSON.stringify(docName))},'${id}')"
               class="flex-shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${isSubmitted?'bg-green-500 border-green-500':'border-gray-300 hover:border-green-400'}">
               ${isSubmitted?'<svg class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>':''}
             </button>
-            <span class="flex-1 text-sm ${isSubmitted?'line-through text-gray-400':'text-gray-700'}">${docName}</span>
+            <span class="flex-1 text-sm ${isSubmitted?'line-through text-gray-400':'text-gray-700'}">${esc(docName)}</span>
             ${item?.submittedAt && isSubmitted ? `<span class="text-xs text-gray-400">${new Date(item.submittedAt).toLocaleDateString('ja-JP')}</span>` : ''}
-            ${isCustom ? `<button onclick="removeCustomDoc('${docName.replace(/'/g,"\\'")}','${id}')" class="text-gray-300 hover:text-red-400 text-lg leading-none">&times;</button>` : ''}
+            ${isCustom ? `<button onclick="removeCustomDoc(${esc(JSON.stringify(docName))},'${id}')" class="text-gray-300 hover:text-red-400 text-lg leading-none">&times;</button>` : ''}
           </div>`;
         }).join('')}
       </div>
@@ -930,10 +934,10 @@ function renderTabContent(id, clients) {
             ${t.completed?'<svg class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>':''}
           </button>
           <div class="flex-1">
-            <p class="text-sm ${t.completed?'line-through text-gray-400':'text-gray-800'}">${t.title}</p>
+            <p class="text-sm ${t.completed?'line-through text-gray-400':'text-gray-800'}">${esc(t.title)}</p>
             <div class="flex gap-3 mt-1">
-              ${t.dueDate?`<span class="text-xs text-gray-400">期限: ${t.dueDate}</span>`:''}
-              ${t.assigneeName?`<span class="text-xs text-gray-400">担当: ${t.assigneeName}</span>`:''}
+              ${t.dueDate?`<span class="text-xs text-gray-400">期限: ${esc(t.dueDate)}</span>`:''}
+              ${t.assigneeName?`<span class="text-xs text-gray-400">担当: ${esc(t.assigneeName)}</span>`:''}
             </div>
           </div>
           <button onclick="removeTask('${t.id}','${id}')" class="text-gray-300 hover:text-red-400 text-lg leading-none">&times;</button>
@@ -1143,7 +1147,7 @@ function fmtBytes(bytes) {
 async function initFileUpload(clientName, caseName, container) {
   container.innerHTML = `
   <div class="space-y-4" id="fu-root">
-    <p class="text-sm text-gray-500">保存先: <span class="font-medium text-gray-700">${clientName} / ${caseName}</span></p>
+    <p class="text-sm text-gray-500">保存先: <span class="font-medium text-gray-700">${esc(clientName)} / ${esc(caseName)}</span></p>
     <div id="fu-dropzone" class="drop-zone border-2 border-dashed border-gray-200 rounded-xl p-8 text-center cursor-pointer hover:border-blue-300 hover:bg-gray-50">
       <input type="file" id="fu-input" multiple class="hidden">
       <svg class="w-10 h-10 mx-auto text-gray-300 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
@@ -1187,13 +1191,13 @@ async function loadFileList(clientName, caseName) {
       <div class="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 border-b border-gray-100 last:border-0">
         <span class="text-xl flex-shrink-0">${fileIcon(f.contentType)}</span>
         <div class="min-w-0 flex-1">
-          <a href="${f.url}" target="_blank" rel="noopener noreferrer" class="text-sm font-medium text-blue-700 hover:underline truncate block">${f.name}</a>
+          <a href="${f.url}" target="_blank" rel="noopener noreferrer" class="text-sm font-medium text-blue-700 hover:underline truncate block">${esc(f.name)}</a>
           <p class="text-xs text-gray-400 mt-0.5">${fmtBytes(f.size)}${f.size&&f.timeCreated?' · ':''}${f.timeCreated?new Date(f.timeCreated).toLocaleDateString('ja-JP'):''}</p>
         </div>
         <a href="${f.url}&response-content-disposition=attachment" target="_blank" class="text-gray-300 hover:text-blue-500 p-1" title="ダウンロード">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
         </a>
-        <button onclick="deleteStorageFile('${f.fullPath}','${clientName}','${caseName}')" class="text-gray-300 hover:text-red-500 p-1" title="削除">
+        <button onclick="deleteStorageFile(${esc(JSON.stringify(f.fullPath))},${esc(JSON.stringify(clientName))},${esc(JSON.stringify(caseName))})" class="text-gray-300 hover:text-red-500 p-1" title="削除">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
         </button>
       </div>`).join('')}
