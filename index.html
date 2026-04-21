@@ -103,6 +103,10 @@
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
         案件管理
       </a>
+      <a id="nav-settings" href="#/settings" class="nav-link hidden flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm cursor-pointer transition-all" data-path="/settings">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+        設定
+      </a>
     </nav>
     <div class="p-3 mx-2 mb-3 rounded-xl" style="background:rgba(255,255,255,0.05);">
       <div class="flex items-center gap-2 px-2 py-1.5 mb-1">
@@ -182,6 +186,9 @@ const MIME_ICONS = {
 
 // ===== ユーティリティ =====
 let currentUser = null;
+let userRole = 'viewer';
+
+function isAdmin() { return userRole === 'admin'; }
 
 function esc(s) {
   return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
@@ -270,18 +277,39 @@ function closeSidebar() {
 }
 
 // ===== 認証 =====
-auth.onAuthStateChanged(user => {
+auth.onAuthStateChanged(async user => {
   if (user) {
     currentUser = user;
+    try {
+      const ref = db.collection('users').doc(user.uid);
+      const snap = await ref.get();
+      if (snap.exists) {
+        userRole = snap.data().role || 'viewer';
+      } else {
+        await ref.set({
+          email: user.email,
+          displayName: user.displayName || '',
+          role: 'viewer',
+          createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        });
+        userRole = 'viewer';
+      }
+    } catch (e) {
+      console.error('role fetch failed:', e);
+      userRole = 'viewer';
+    }
     document.getElementById('login-screen').classList.add('hidden');
     document.getElementById('app-screen').classList.remove('hidden');
     const name = user.displayName || user.email;
     document.getElementById('sidebar-user').textContent = name;
     const avatar = document.getElementById('sidebar-avatar');
     if (avatar) avatar.textContent = (name || 'U')[0].toUpperCase();
+    const settingsLink = document.getElementById('nav-settings');
+    if (settingsLink) settingsLink.classList.toggle('hidden', !isAdmin());
     handleRoute();
   } else {
     currentUser = null;
+    userRole = 'viewer';
     document.getElementById('login-screen').classList.remove('hidden');
     document.getElementById('app-screen').classList.add('hidden');
   }
@@ -318,12 +346,67 @@ function handleRoute() {
   if (hash === '/' || hash === '') return renderDashboard();
   if (hash === '/clients') return renderClients();
   if (hash === '/cases') return renderCases();
+  if (hash === '/settings') return renderSettings();
   if (parts[0] === 'clients' && parts[1]) return renderClientDetail(parts[1]);
   if (parts[0] === 'cases' && parts[1]) return renderCaseDetail(parts[1]);
   renderDashboard();
 }
 
 window.addEventListener('hashchange', handleRoute);
+
+// ===== 設定 =====
+async function renderSettings() {
+  if (!isAdmin()) { toast('管理者権限が必要です', 'error'); navigate('/'); return; }
+  setPageTitle('設定');
+  setTopbarActions('');
+  document.getElementById('page-content').innerHTML = `<div class="flex justify-center py-12"><div class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div></div>`;
+
+  let users = [];
+  try {
+    const snap = await db.collection('users').get();
+    users = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+      .sort((a, b) => (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0));
+  } catch (e) { console.error('users fetch failed:', e); }
+
+  document.getElementById('page-content').innerHTML = `
+  <div class="max-w-2xl mx-auto space-y-6">
+    <div class="bg-white rounded-xl border border-gray-200 p-6">
+      <h2 class="text-base font-semibold text-gray-800 mb-1">ユーザー権限管理</h2>
+      <p class="text-xs text-gray-400 mb-4">※ UI上の制限のみ。完全な保護はFirestoreセキュリティルールで設定してください</p>
+      ${users.length === 0 ? '<p class="text-sm text-gray-400 text-center py-8">ユーザーがいません</p>' : `
+      <div class="divide-y divide-gray-100">
+        ${users.map(u => `
+        <div class="flex items-center justify-between py-3">
+          <div>
+            <p class="text-sm font-medium text-gray-800">${esc(u.email)}</p>
+            ${u.displayName ? `<p class="text-xs text-gray-400">${esc(u.displayName)}</p>` : ''}
+          </div>
+          <select onchange="updateUserRole('${u.id}',this.value)"
+            class="px-3 py-1.5 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            ${u.id === currentUser?.uid ? 'title="自分自身のロールは変更できません"' : ''}>
+            <option value="admin" ${u.role==='admin'?'selected':''}>管理者</option>
+            <option value="viewer" ${u.role!=='admin'?'selected':''}>閲覧のみ</option>
+          </select>
+        </div>`).join('')}
+      </div>`}
+    </div>
+    <div class="bg-amber-50 border border-amber-200 rounded-xl p-4">
+      <p class="text-sm font-medium text-amber-800 mb-1">初期管理者の設定方法</p>
+      <p class="text-xs text-amber-700">ログイン済みユーザーは自動的に上の一覧に表示されます。最初の管理者は Firebase Console → Firestore → users コレクションで <code class="bg-amber-100 px-1 rounded">role: "admin"</code> を手動設定してください。</p>
+    </div>
+  </div>`;
+}
+
+async function updateUserRole(uid, role) {
+  if (uid === currentUser?.uid) { toast('自分自身のロールは変更できません', 'error'); renderSettings(); return; }
+  try {
+    await db.collection('users').doc(uid).update({ role });
+    toast(role === 'admin' ? '管理者権限を付与しました' : '閲覧専用に変更しました');
+  } catch (e) {
+    console.error('updateUserRole failed:', e);
+    toast('権限の変更に失敗しました', 'error');
+  }
+}
 
 // ===== ダッシュボード =====
 async function renderDashboard() {
@@ -461,9 +544,9 @@ async function renderClients() {
     <button onclick="exportClientsCSV()" class="flex items-center gap-1.5 px-3 py-1.5 border border-gray-300 text-sm text-gray-600 rounded-lg hover:bg-gray-50">
       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>CSV
     </button>
-    <button onclick="openClientModal(null)" class="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700">
+    ${isAdmin() ? `<button onclick="openClientModal(null)" class="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700">
       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>顧客追加
-    </button>`);
+    </button>` : ''}`);
   document.getElementById('page-content').innerHTML = `<div class="flex items-center justify-center h-32 text-gray-400"><div class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div></div>`;
 
   const snap = await db.collection('clients').orderBy('createdAt','desc').get();
@@ -507,8 +590,8 @@ function renderClientsTable(search) {
             <td class="px-4 py-3 text-right">
               <div class="flex items-center justify-end gap-2">
                 <a href="#/cases?client=${c.id}" class="text-xs text-blue-600 hover:text-blue-800 px-2 py-1 rounded hover:bg-blue-50">案件</a>
-                <button onclick="openClientModal('${c.id}')" class="text-xs text-gray-600 hover:text-gray-800 px-2 py-1 rounded hover:bg-gray-100">編集</button>
-                <button onclick="deleteClient('${c.id}',${esc(JSON.stringify(c.name))})" class="text-xs text-red-500 hover:text-red-700 px-2 py-1 rounded hover:bg-red-50">削除</button>
+                ${isAdmin() ? `<button onclick="openClientModal('${c.id}')" class="text-xs text-gray-600 hover:text-gray-800 px-2 py-1 rounded hover:bg-gray-100">編集</button>
+                <button onclick="deleteClient('${c.id}',${esc(JSON.stringify(c.name))})" class="text-xs text-red-500 hover:text-red-700 px-2 py-1 rounded hover:bg-red-50">削除</button>` : ''}
               </div>
             </td>
           </tr>`).join('')}
@@ -656,9 +739,9 @@ async function renderCases() {
     <button onclick="exportCasesCSV()" class="flex items-center gap-1.5 px-3 py-1.5 border border-gray-300 text-sm text-gray-600 rounded-lg hover:bg-gray-50">
       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>CSV
     </button>
-    <a href="#/cases/new" class="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700">
+    ${isAdmin() ? `<a href="#/cases/new" class="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700">
       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>新規案件
-    </a>`);
+    </a>` : ''}`);
   document.getElementById('page-content').innerHTML = `<div class="flex items-center justify-center h-32"><div class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div></div>`;
 
   const snap = await db.collection('cases').orderBy('createdAt','desc').get();
@@ -796,8 +879,8 @@ function renderCaseDetailUI(id, clients, isNew) {
         </div>
       </div>
       <div class="flex gap-2">
-        ${!isNew_ ? `<button onclick="deleteCase('${id}')" class="px-3 py-2 text-sm text-red-600 border border-red-200 rounded-lg hover:bg-red-50">削除</button>` : ''}
-        <button onclick="saveCase('${id}')" id="save-btn" class="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700">保存</button>
+        ${!isNew_ && isAdmin() ? `<button onclick="deleteCase('${id}')" class="px-3 py-2 text-sm text-red-600 border border-red-200 rounded-lg hover:bg-red-50">削除</button>` : ''}
+        ${isAdmin() ? `<button onclick="saveCase('${id}')" id="save-btn" class="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700">保存</button>` : ''}
       </div>
     </div>
 
@@ -833,6 +916,7 @@ function renderCaseDetailUI(id, clients, isNew) {
 }
 
 function setCaseStatus(status, id) {
+  if (!isAdmin()) { toast('管理者権限が必要です', 'error'); return; }
   if (caseData.status === status) return;
   const prev = caseData.status;
   caseData.status = status;
