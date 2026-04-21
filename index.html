@@ -495,7 +495,7 @@ function renderClientsTable(search) {
               <div class="flex items-center justify-end gap-2">
                 <a href="#/cases?client=${c.id}" class="text-xs text-blue-600 hover:text-blue-800 px-2 py-1 rounded hover:bg-blue-50">案件</a>
                 <button onclick="openClientModal('${c.id}')" class="text-xs text-gray-600 hover:text-gray-800 px-2 py-1 rounded hover:bg-gray-100">編集</button>
-                <button onclick="deleteClient('${c.id}','${c.name}')" class="text-xs text-red-500 hover:text-red-700 px-2 py-1 rounded hover:bg-red-50">削除</button>
+                <button data-action="delete-client" data-id="${c.id}" class="text-xs text-red-500 hover:text-red-700 px-2 py-1 rounded hover:bg-red-50">削除</button>
               </div>
             </td>
           </tr>`).join('')}
@@ -624,6 +624,7 @@ async function renderClientDetail(id) {
 
 // ===== 案件一覧 =====
 let casesCache = [];
+let casesFilterState = { search: '', status: '', client: '' };
 
 async function renderCases() {
   setPageTitle('案件管理');
@@ -639,7 +640,12 @@ async function renderCases() {
   renderCasesTable('', urlStatus, urlClient);
 }
 
+function clearCasesFilter() {
+  renderCasesTable('', '', '');
+}
+
 function renderCasesTable(search, statusFilter, clientFilter) {
+  casesFilterState = { search, status: statusFilter, client: clientFilter };
   const filtered = casesCache.filter(c => {
     const ms = !search || c.title?.includes(search) || c.clientName?.includes(search) || c.bankName?.includes(search);
     const mst = !statusFilter || c.status === statusFilter;
@@ -651,15 +657,15 @@ function renderCasesTable(search, statusFilter, clientFilter) {
     <div class="flex flex-wrap gap-3">
       <div class="relative flex-1 min-w-48">
         <svg class="absolute left-3 top-2.5 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-        <input type="text" id="case-search" value="${esc(search)}" oninput="renderCasesTable(this.value,'${statusFilter}','${clientFilter}')" placeholder="案件名・顧客・銀行で検索"
+        <input type="text" id="case-search" value="${esc(search)}" oninput="renderCasesTable(this.value, casesFilterState.status, casesFilterState.client)" placeholder="案件名・顧客・銀行で検索"
           class="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
       </div>
-      <select id="case-status-filter" onchange="renderCasesTable(document.getElementById('case-search').value,this.value,'${clientFilter}')"
+      <select id="case-status-filter" onchange="renderCasesTable(casesFilterState.search, this.value, casesFilterState.client)"
         class="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
         <option value="">すべてのステータス</option>
         ${STATUS_LIST.map(s=>`<option value="${s.id}" ${statusFilter===s.id?'selected':''}>${s.id}</option>`).join('')}
       </select>
-      ${statusFilter || clientFilter ? `<button onclick="renderCasesTable('','','')" class="px-3 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">フィルタ解除</button>` : ''}
+      ${statusFilter || clientFilter ? `<button onclick="clearCasesFilter()" class="px-3 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">フィルタ解除</button>` : ''}
     </div>
     <p class="text-sm text-gray-500">${filtered.length}件の案件</p>
     ${filtered.length === 0 ? `<div class="text-center py-16 text-gray-400 text-sm">案件がありません</div>` : `
@@ -888,13 +894,13 @@ function renderTabContent(id, clients) {
           const isCustom = !DEFAULT_DOCUMENTS.includes(docName);
           return `
           <div class="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50">
-            <button onclick="toggleDoc('${docName.replace(/'/g,"\\'")}','${id}')"
+            <button data-action="toggle-doc" data-doc="${esc(docName)}" data-case-id="${id}"
               class="flex-shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${isSubmitted?'bg-green-500 border-green-500':'border-gray-300 hover:border-green-400'}">
               ${isSubmitted?'<svg class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>':''}
             </button>
             <span class="flex-1 text-sm ${isSubmitted?'line-through text-gray-400':'text-gray-700'}">${esc(docName)}</span>
             ${item?.submittedAt && isSubmitted ? `<span class="text-xs text-gray-400">${new Date(item.submittedAt).toLocaleDateString('ja-JP')}</span>` : ''}
-            ${isCustom ? `<button onclick="removeCustomDoc('${docName.replace(/'/g,"\\'")}','${id}')" class="text-gray-300 hover:text-red-400 text-lg leading-none">&times;</button>` : ''}
+            ${isCustom ? `<button data-action="remove-doc" data-doc="${esc(docName)}" data-case-id="${id}" class="text-gray-300 hover:text-red-400 text-lg leading-none">&times;</button>` : ''}
           </div>`;
         }).join('')}
       </div>
@@ -1146,7 +1152,10 @@ function fmtBytes(bytes) {
   return `${(n/1024/1024).toFixed(1)} MB`;
 }
 
+let fileUploadCtx = null;
+
 async function initFileUpload(clientName, caseName, container) {
+  fileUploadCtx = { clientName, caseName };
   container.innerHTML = `
   <div class="space-y-4" id="fu-root">
     <p class="text-sm text-gray-500">保存先: <span class="font-medium text-gray-700">${esc(clientName)} / ${esc(caseName)}</span></p>
@@ -1199,7 +1208,7 @@ async function loadFileList(clientName, caseName) {
         <a href="${f.url}&response-content-disposition=attachment" target="_blank" class="text-gray-300 hover:text-blue-500 p-1" title="ダウンロード">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
         </a>
-        <button onclick="deleteStorageFile('${f.fullPath}','${clientName}','${caseName}')" class="text-gray-300 hover:text-red-500 p-1" title="削除">
+        <button data-action="delete-file" data-path="${esc(f.fullPath)}" class="text-gray-300 hover:text-red-500 p-1" title="削除">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
         </button>
       </div>`).join('')}
@@ -1257,6 +1266,24 @@ async function deleteStorageFile(fullPath, clientName, caseName) {
 
 // ===== 初期化 =====
 window.addEventListener('hashchange', handleRoute);
+
+// イベント委譲（data-action に基づくクリック処理）
+document.addEventListener('click', (e) => {
+  const el = e.target.closest('[data-action]');
+  if (!el) return;
+  const action = el.dataset.action;
+  if (action === 'delete-client') {
+    const id = el.dataset.id;
+    const name = clientsCache.find(c => c.id === id)?.name || '';
+    deleteClient(id, name);
+  } else if (action === 'toggle-doc') {
+    toggleDoc(el.dataset.doc, el.dataset.caseId);
+  } else if (action === 'remove-doc') {
+    removeCustomDoc(el.dataset.doc, el.dataset.caseId);
+  } else if (action === 'delete-file') {
+    if (fileUploadCtx) deleteStorageFile(el.dataset.path, fileUploadCtx.clientName, fileUploadCtx.caseName);
+  }
+});
 </script>
 </body>
 </html>
