@@ -543,6 +543,8 @@ function field(label, id, type, value, placeholder) {
 async function saveClient(id) {
   const name = document.getElementById('field-name').value.trim();
   if (!name) { toast('会社名は必須です', 'error'); return; }
+  const email = v('email');
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { toast('メールアドレスの形式が正しくありません', 'error'); return; }
   const data = {
     name, industry: v('industry'), representative: v('representative'),
     representativeTitle: v('representativeTitle'), email: v('email'),
@@ -1076,6 +1078,9 @@ async function saveCase(id) {
   syncCaseFormData();
   if (!caseData.title.trim()) { toast('案件名は必須です', 'error'); return; }
   if (!caseData.clientId) { toast('顧客を選択してください', 'error'); return; }
+  if (caseData.loanAmount && (isNaN(Number(caseData.loanAmount)) || Number(caseData.loanAmount) < 0)) {
+    toast('融資希望額は0以上の数値を入力してください', 'error'); return;
+  }
   const btn = document.getElementById('save-btn');
   if (btn) btn.textContent = '保存中...';
 
