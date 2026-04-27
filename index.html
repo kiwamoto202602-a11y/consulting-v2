@@ -216,7 +216,7 @@ tbody tr:last-child td{border-bottom:none;}
 </div>
 
 <!-- ===== APP ===== -->
-<div id="app-screen" class="hidden flex h-screen overflow-hidden">
+<div id="app-screen" class="flex h-screen overflow-hidden" style="display:none">
 
   <!-- Mobile overlay -->
   <div id="sidebar-overlay" class="hidden fixed inset-0 z-40" style="background:rgba(0,0,0,0.6);" onclick="closeSidebar()"></div>
@@ -398,8 +398,8 @@ function closeSidebar() {
 auth.onAuthStateChanged(user => {
   if (user) {
     currentUser = user;
-    document.getElementById('login-screen').classList.add('hidden');
-    document.getElementById('app-screen').classList.remove('hidden');
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('app-screen').style.display = 'flex';
     const name = user.displayName || user.email;
     document.getElementById('sidebar-user').textContent = name;
     const av = document.getElementById('sidebar-avatar');
@@ -407,8 +407,8 @@ auth.onAuthStateChanged(user => {
     handleRoute();
   } else {
     currentUser = null;
-    document.getElementById('login-screen').classList.remove('hidden');
-    document.getElementById('app-screen').classList.add('hidden');
+    document.getElementById('login-screen').style.display = '';
+    document.getElementById('app-screen').style.display = 'none';
   }
 });
 
