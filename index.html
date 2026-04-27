@@ -71,7 +71,7 @@
 </div>
 
 <!-- ========== アプリ画面 ========== -->
-<div id="app-screen" class="hidden flex h-screen overflow-hidden">
+<div id="app-screen" class="flex h-screen overflow-hidden" style="display:none">
 
   <!-- モバイルオーバーレイ -->
   <div id="sidebar-overlay" class="hidden fixed inset-0 bg-black bg-opacity-50 z-40" onclick="closeSidebar()"></div>
@@ -259,8 +259,8 @@ function closeSidebar() {
 auth.onAuthStateChanged(user => {
   if (user) {
     currentUser = user;
-    document.getElementById('login-screen').classList.add('hidden');
-    document.getElementById('app-screen').classList.remove('hidden');
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('app-screen').style.display = 'flex';
     const name = user.displayName || user.email;
     document.getElementById('sidebar-user').textContent = name;
     const avatar = document.getElementById('sidebar-avatar');
@@ -268,8 +268,8 @@ auth.onAuthStateChanged(user => {
     handleRoute();
   } else {
     currentUser = null;
-    document.getElementById('login-screen').classList.remove('hidden');
-    document.getElementById('app-screen').classList.add('hidden');
+    document.getElementById('login-screen').style.display = '';
+    document.getElementById('app-screen').style.display = 'none';
   }
 });
 
