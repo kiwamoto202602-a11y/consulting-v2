@@ -417,12 +417,17 @@ document.getElementById('login-form').addEventListener('submit', async e => {
   const email = document.getElementById('login-email').value;
   const password = document.getElementById('login-password').value;
   const errEl = document.getElementById('login-error');
+  const btn = e.target.querySelector('button[type="submit"]');
   errEl.classList.add('hidden');
+  btn.disabled = true;
+  btn.textContent = '認証中...';
   try {
     await auth.signInWithEmailAndPassword(email, password);
   } catch {
     errEl.textContent = 'メールアドレスまたはパスワードが正しくありません';
     errEl.classList.remove('hidden');
+    btn.disabled = false;
+    btn.textContent = 'ログイン';
   }
 });
 async function handleLogout() { await auth.signOut(); }
