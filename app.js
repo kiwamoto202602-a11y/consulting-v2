@@ -67,9 +67,12 @@ function fmtDate(ts) {
   return `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;
 }
 function fmtMoney(v) {
-  if (!v) return '-';
+  if (v === null || v === undefined || v === '') return '-';
   return Number(v).toLocaleString('ja-JP') + '万円';
 }
+function escAttr(s) { return String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function escJS(s) { return String(s||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'"); }
+function sanitizeStoragePath(s) { return String(s||'').replace(/[#?&]/g,'_'); }
 function statusBadge(status) {
   const s = STATUS_LIST.find(x => x.id === status) || { color:'badge-gray' };
   return `<span class="badge ${s.color}">${status || '-'}</span>`;
@@ -137,6 +140,46 @@ document.getElementById('login-form').addEventListener('submit', async e => {
 });
 async function handleLogout() { await auth.signOut(); }
 
+// ===== パスワード管理 =====
+async function sendPasswordReset(e) {
+  e && e.preventDefault();
+  const email = document.getElementById('login-email').value.trim();
+  if (!email) { alert('メールアドレスを入力してください'); return; }
+  try {
+    await auth.sendPasswordResetEmail(email);
+    alert('パスワードリセットメールを送信しました。メールをご確認ください。');
+  } catch {
+    alert('送信に失敗しました。メールアドレスを確認してください。');
+  }
+}
+function showChangePasswordModal() {
+  ['pw-current','pw-new','pw-confirm'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('pw-error').style.display = 'none';
+  document.getElementById('pw-success').style.display = 'none';
+  document.getElementById('pw-change-modal').style.display = 'flex';
+  closeSidebar();
+}
+async function doChangePassword() {
+  const current = document.getElementById('pw-current').value;
+  const newPw = document.getElementById('pw-new').value;
+  const confirm = document.getElementById('pw-confirm').value;
+  const errEl = document.getElementById('pw-error');
+  const okEl = document.getElementById('pw-success');
+  errEl.style.display = 'none'; okEl.style.display = 'none';
+  if (newPw.length < 6) { errEl.textContent = 'パスワードは6文字以上にしてください'; errEl.style.display = 'block'; return; }
+  if (newPw !== confirm) { errEl.textContent = 'パスワードが一致しません'; errEl.style.display = 'block'; return; }
+  try {
+    const credential = firebase.auth.EmailAuthProvider.credential(currentUser.email, current);
+    await currentUser.reauthenticateWithCredential(credential);
+    await currentUser.updatePassword(newPw);
+    okEl.style.display = 'block';
+    setTimeout(() => { document.getElementById('pw-change-modal').style.display = 'none'; }, 1500);
+  } catch(e) {
+    errEl.textContent = e.code === 'auth/wrong-password' ? '現在のパスワードが正しくありません' : 'パスワード変更に失敗しました';
+    errEl.style.display = 'block';
+  }
+}
+
 // ===== ルーター =====
 function navigate(path) { window.location.hash = '#' + path; }
 function handleRoute() {
@@ -150,7 +193,7 @@ function handleRoute() {
   if (parts[0] === 'cases' && parts[1]) return renderCaseDetail(parts[1]);
   renderDashboard();
 }
-window.addEventListener('hashchange', handleRoute);
+
 
 // ===== ローディング =====
 function loadingHTML() {
@@ -167,12 +210,18 @@ async function renderDashboard() {
     <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/></svg>新規案件</a>`);
   document.getElementById('page-content').innerHTML = loadingHTML();
 
-  const [casesSnap, clientsSnap] = await Promise.all([
-    db.collection('cases').orderBy('createdAt','desc').limit(50).get(),
-    db.collection('clients').orderBy('createdAt','desc').limit(100).get(),
-  ]);
-  const cases = casesSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-  const clients = clientsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+  let cases = [], clients = [];
+  try {
+    const [casesSnap, clientsSnap] = await Promise.all([
+      db.collection('cases').orderBy('createdAt','desc').limit(50).get(),
+      db.collection('clients').orderBy('createdAt','desc').limit(100).get(),
+    ]);
+    cases = casesSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    clients = clientsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+  } catch(e) {
+    document.getElementById('page-content').innerHTML = `<p style="text-align:center;padding:64px 0;color:#94190F;font-size:13px;">データ取得に失敗しました</p>`;
+    console.error(e); return;
+  }
   const now = new Date();
 
   const inProgress = cases.filter(c => c.status !== '承認' && c.status !== '否決').length;
@@ -308,9 +357,14 @@ async function renderClients() {
   setTopbarActions(`<button onclick="openClientModal(null)" class="btn-primary">
     <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/></svg>顧客追加</button>`);
   document.getElementById('page-content').innerHTML = loadingHTML();
-  const snap = await db.collection('clients').orderBy('createdAt','desc').get();
-  clientsCache = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-  renderClientsTable('');
+  try {
+    const snap = await db.collection('clients').orderBy('createdAt','desc').get();
+    clientsCache = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderClientsTable('');
+  } catch(e) {
+    document.getElementById('page-content').innerHTML = `<p style="text-align:center;padding:64px 0;color:#94190F;font-size:13px;">データ取得に失敗しました</p>`;
+    console.error(e);
+  }
 }
 
 function renderClientsTable(search) {
@@ -321,7 +375,7 @@ function renderClientsTable(search) {
   <div style="display:flex;flex-direction:column;gap:16px;">
     <div style="position:relative;max-width:320px;">
       <svg style="position:absolute;left:11px;top:50%;transform:translateY(-50%);width:14px;height:14px;color:var(--t3);" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-      <input type="text" id="client-search" value="${search}" oninput="renderClientsTable(this.value)" placeholder="会社名・業種・担当者で検索"
+      <input type="text" id="client-search" value="${escAttr(search)}" oninput="renderClientsTable(this.value)" placeholder="会社名・業種・担当者で検索"
         style="width:100%;padding:9px 12px 9px 34px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;">
     </div>
     ${filtered.length === 0
@@ -349,7 +403,7 @@ function renderClientsTable(search) {
                   <div style="display:flex;align-items:center;justify-content:flex-end;gap:4px;">
                     <a href="#/cases?client=${c.id}" style="font-size:11.5px;color:var(--primary);padding:5px 10px;border-radius:5px;border:1px solid var(--primary-t);text-decoration:none;transition:background 0.15s;" onmouseover="this.style.background='var(--primary-t)'" onmouseout="this.style.background='transparent'">案件</a>
                     <button onclick="openClientModal('${c.id}')" style="font-size:11.5px;color:var(--t2);padding:5px 10px;border-radius:5px;border:1px solid var(--border);background:transparent;cursor:pointer;transition:background 0.15s;" onmouseover="this.style.background='#F0EDE8'" onmouseout="this.style.background='transparent'">編集</button>
-                    <button onclick="deleteClient('${c.id}','${c.name}')" style="font-size:11.5px;color:#94190F;padding:5px 10px;border-radius:5px;border:1px solid #F5CECA;background:transparent;cursor:pointer;transition:background 0.15s;" onmouseover="this.style.background='#FEE8E6'" onmouseout="this.style.background='transparent'">削除</button>
+                    <button onclick="deleteClient('${c.id}','${escJS(c.name)}')" style="font-size:11.5px;color:#94190F;padding:5px 10px;border-radius:5px;border:1px solid #F5CECA;background:transparent;cursor:pointer;transition:background 0.15s;" onmouseover="this.style.background='#FEE8E6'" onmouseout="this.style.background='transparent'">削除</button>
                   </div>
                 </td>
               </tr>`).join('')}
@@ -430,10 +484,16 @@ function v(id) { return document.getElementById('field-'+id)?.value || ''; }
 async function renderClientDetail(id) {
   setPageTitle('顧客詳細'); setTopbarActions('');
   document.getElementById('page-content').innerHTML = loadingHTML();
-  const [docSnap, casesSnap] = await Promise.all([
-    db.collection('clients').doc(id).get(),
-    db.collection('cases').where('clientId','==',id).orderBy('createdAt','desc').get(),
-  ]);
+  let docSnap, casesSnap;
+  try {
+    [docSnap, casesSnap] = await Promise.all([
+      db.collection('clients').doc(id).get(),
+      db.collection('cases').where('clientId','==',id).orderBy('createdAt','desc').get(),
+    ]);
+  } catch(e) {
+    document.getElementById('page-content').innerHTML = `<p style="text-align:center;padding:64px 0;color:#94190F;font-size:13px;">データ取得に失敗しました</p>`;
+    console.error(e); return;
+  }
   if (!docSnap.exists) { toast('顧客が見つかりません','error'); navigate('/clients'); return; }
   const client = { id: docSnap.id, ...docSnap.data() };
   const cases = casesSnap.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -488,8 +548,13 @@ async function renderCases() {
   setTopbarActions(`<a href="#/cases/new" class="btn-primary">
     <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/></svg>新規案件</a>`);
   document.getElementById('page-content').innerHTML = loadingHTML();
-  const snap = await db.collection('cases').orderBy('createdAt','desc').get();
-  casesCache = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  try {
+    const snap = await db.collection('cases').orderBy('createdAt','desc').get();
+    casesCache = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  } catch(e) {
+    document.getElementById('page-content').innerHTML = `<p style="text-align:center;padding:64px 0;color:#94190F;font-size:13px;">データ取得に失敗しました</p>`;
+    console.error(e); return;
+  }
   const urlStatus = new URLSearchParams(window.location.hash.split('?')[1]||'').get('status')||'';
   const urlClient = new URLSearchParams(window.location.hash.split('?')[1]||'').get('client')||'';
   renderCasesTable('', urlStatus, urlClient);
@@ -507,10 +572,10 @@ function renderCasesTable(search, statusFilter, clientFilter) {
     <div style="display:flex;flex-wrap:wrap;gap:10px;">
       <div style="position:relative;flex:1;min-width:200px;">
         <svg style="position:absolute;left:11px;top:50%;transform:translateY(-50%);width:14px;height:14px;color:var(--t3);" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-        <input type="text" id="case-search" value="${search}" oninput="renderCasesTable(this.value,'${statusFilter}','${clientFilter}')" placeholder="案件名・顧客・銀行で検索"
+        <input type="text" id="case-search" value="${escAttr(search)}" oninput="renderCasesTable(this.value,'${escJS(statusFilter)}','${escJS(clientFilter)}')" placeholder="案件名・顧客・銀行で検索"
           style="width:100%;padding:9px 12px 9px 34px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;">
       </div>
-      <select id="case-status-filter" onchange="renderCasesTable(document.getElementById('case-search').value,this.value,'${clientFilter}')"
+      <select id="case-status-filter" onchange="renderCasesTable(document.getElementById('case-search').value,this.value,'${escJS(clientFilter)}')"
         style="padding:9px 32px 9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;min-width:160px;">
         <option value="">すべてのステータス</option>
         ${STATUS_LIST.map(s=>`<option value="${s.id}" ${statusFilter===s.id?'selected':''}>${s.id}</option>`).join('')}
@@ -557,9 +622,15 @@ async function renderCaseDetail(id) {
   const urlParams = new URLSearchParams(window.location.hash.split('?')[1]||'');
   const preClientId = urlParams.get('clientId')||'';
   const preClientName = urlParams.get('clientName')||'';
-  const clientsSnap = await db.collection('clients').orderBy('name').get();
-  const clients = clientsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-  clientsCache = clients;
+  let clients = [];
+  try {
+    const clientsSnap = await db.collection('clients').orderBy('name').get();
+    clients = clientsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    clientsCache = clients;
+  } catch(e) {
+    document.getElementById('page-content').innerHTML = `<p style="text-align:center;padding:64px 0;color:#94190F;font-size:13px;">データ取得に失敗しました</p>`;
+    console.error(e); return;
+  }
   if (isNew) {
     caseData = {
       title:'', clientId:preClientId, clientName:preClientName,
@@ -568,9 +639,16 @@ async function renderCaseDetail(id) {
       caseDate:new Date().toISOString().split('T')[0],
       deadline:'', notes:'', documents:[], tasks:[],
     };
-    if (preClientId && preClientName) await autoGenerateTitle(preClientId, preClientName);
+    if (preClientId && preClientName) {
+      try { await autoGenerateTitle(preClientId, preClientName); } catch(e) { console.error(e); }
+    }
   } else {
-    const snap = await db.collection('cases').doc(id).get();
+    let snap;
+    try { snap = await db.collection('cases').doc(id).get(); }
+    catch(e) {
+      document.getElementById('page-content').innerHTML = `<p style="text-align:center;padding:64px 0;color:#94190F;font-size:13px;">データ取得に失敗しました</p>`;
+      console.error(e); return;
+    }
     if (!snap.exists) { toast('案件が見つかりません','error'); navigate('/cases'); return; }
     const d = snap.data();
     caseData = {
@@ -735,7 +813,7 @@ function renderTabContent(id, clients) {
               style="width:18px;height:18px;border-radius:4px;border:1.5px solid ${isSubmitted?'#166534':'#C8D4DF'};background:${isSubmitted?'#166534':'transparent'};display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;transition:all 0.15s;">
               ${isSubmitted?`<svg width="10" height="10" fill="none" stroke="#FFF" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>`:''}
             </button>
-            <span style="flex:1;font-size:13px;${isSubmitted?'text-decoration:line-through;color:var(--t3);':'color:var(--t1);'}">${docName}</span>
+            <span style="flex:1;font-size:13px;${isSubmitted?'text-decoration:line-through;color:var(--t3);':'color:var(--t1);'}">${escAttr(docName)}</span>
             ${item?.submittedAt&&isSubmitted?`<span style="font-size:11px;color:var(--t3);">${new Date(item.submittedAt).toLocaleDateString('ja-JP')}</span>`:''}
             ${isCustom?`<button onclick="removeCustomDoc('${docName.replace(/'/g,"\\'")}','${id}')" style="color:var(--t3);background:none;border:none;cursor:pointer;font-size:16px;line-height:1;padding:2px;" onmouseover="this.style.color='#94190F'" onmouseout="this.style.color='var(--t3)'">&times;</button>`:''}
           </div>`;
@@ -779,10 +857,10 @@ function renderTabContent(id, clients) {
                 ${t.completed?`<svg width="10" height="10" fill="none" stroke="#FFF" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>`:''}
               </button>
               <div style="flex:1;">
-                <p style="font-size:13px;${t.completed?'text-decoration:line-through;color:var(--t3);':'color:var(--t1);font-weight:500;'}">${t.title}</p>
+                <p style="font-size:13px;${t.completed?'text-decoration:line-through;color:var(--t3);':'color:var(--t1);font-weight:500;'}">${escAttr(t.title)}</p>
                 <div style="display:flex;gap:12px;margin-top:4px;">
-                  ${t.dueDate?`<span style="font-size:11px;color:var(--t3);">期限: ${t.dueDate}</span>`:''}
-                  ${t.assigneeName?`<span style="font-size:11px;color:var(--t3);">担当: ${t.assigneeName}</span>`:''}
+                  ${t.dueDate?`<span style="font-size:11px;color:var(--t3);">期限: ${escAttr(t.dueDate)}</span>`:''}
+                  ${t.assigneeName?`<span style="font-size:11px;color:var(--t3);">担当: ${escAttr(t.assigneeName)}</span>`:''}
                 </div>
               </div>
               <button onclick="removeTask('${t.id}','${id}')" style="color:var(--t3);background:none;border:none;cursor:pointer;font-size:16px;padding:2px;line-height:1;" onmouseover="this.style.color='#94190F'" onmouseout="this.style.color='var(--t3)'">&times;</button>
@@ -882,7 +960,7 @@ async function autoSaveField(id, field, value) {
   try {
     await db.collection('cases').doc(id).update({[field]:value,updatedAt:firebase.firestore.FieldValue.serverTimestamp()});
     showAutoSaveIndicator();
-  } catch {}
+  } catch(e) { console.error('自動保存失敗:', e); toast('自動保存に失敗しました','error'); }
 }
 function showAutoSaveIndicator() {
   let el = document.getElementById('autosave-indicator');
@@ -899,6 +977,7 @@ async function saveCase(id) {
   const btn = document.getElementById('save-btn');
   if (btn) btn.textContent = '保存中...';
   const payload = { ...caseData, deadline:caseData.deadline?new Date(caseData.deadline):null, updatedAt:firebase.firestore.FieldValue.serverTimestamp() };
+  delete payload.id;
   try {
     if (id==='new') {
       payload.createdAt = firebase.firestore.FieldValue.serverTimestamp();
@@ -921,6 +1000,7 @@ async function compressImage(file) {
   return new Promise(resolve => {
     const img = new Image();
     const url = URL.createObjectURL(file);
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(file); };
     img.onload = () => {
       const MAX=1280; let {width,height}=img;
       if (width>MAX||height>MAX) {
@@ -930,8 +1010,7 @@ async function compressImage(file) {
       const canvas=document.createElement('canvas');
       canvas.width=width; canvas.height=height;
       canvas.getContext('2d').drawImage(img,0,0,width,height);
-      canvas.toBlob(resolve,'image/jpeg',0.7);
-      URL.revokeObjectURL(url);
+      canvas.toBlob(blob => { URL.revokeObjectURL(url); resolve(blob||file); },'image/jpeg',0.7);
     };
     img.src=url;
   });
@@ -969,7 +1048,7 @@ async function loadFileList(clientName, caseName) {
   const listEl=document.getElementById('fu-list');
   if (!listEl) return;
   try {
-    const ref=storage.ref(`${clientName}/${caseName}`);
+    const ref=storage.ref(`${sanitizeStoragePath(clientName)}/${sanitizeStoragePath(caseName)}`);
     const result=await ref.listAll();
     if (result.items.length===0) {
       listEl.innerHTML=`<p style="text-align:center;padding:24px 0;font-size:13px;color:var(--t3);">まだファイルがありません</p>`;
@@ -992,7 +1071,7 @@ async function loadFileList(clientName, caseName) {
         <a href="${f.url}&response-content-disposition=attachment" target="_blank" style="color:var(--t3);padding:4px;" onmouseover="this.style.color='var(--primary)'" onmouseout="this.style.color='var(--t3)'">
           <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
         </a>
-        <button onclick="deleteStorageFile('${f.fullPath}','${clientName}','${caseName}')" style="color:var(--t3);background:none;border:none;cursor:pointer;padding:4px;" onmouseover="this.style.color='#94190F'" onmouseout="this.style.color='var(--t3)'">
+        <button onclick="deleteStorageFile('${escJS(f.fullPath)}','${escJS(clientName)}','${escJS(caseName)}')" style="color:var(--t3);background:none;border:none;cursor:pointer;padding:4px;" onmouseover="this.style.color='#94190F'" onmouseout="this.style.color='var(--t3)'">
           <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
         </button>
       </div>`).join('')}
@@ -1014,7 +1093,7 @@ async function handleFiles(fileList, clientName, caseName) {
         const blob=await compressImage(file);
         uploadFile=new File([blob],file.name,{type:'image/jpeg'});
       }
-      await storage.ref(`${clientName}/${caseName}/${file.name}`).put(uploadFile);
+      await storage.ref(`${sanitizeStoragePath(clientName)}/${sanitizeStoragePath(caseName)}/${file.name}`).put(uploadFile);
       success++;
     } catch { toast(`「${file.name}」のアップロードに失敗しました`,'error'); }
   }
@@ -1022,8 +1101,8 @@ async function handleFiles(fileList, clientName, caseName) {
   if (dropzone) {
     dropzone.innerHTML=`<input type="file" id="fu-input" multiple style="display:none;"><svg style="width:40px;height:40px;color:var(--t3);margin:0 auto 10px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg><p style="font-size:13px;font-weight:500;color:var(--t2);">クリックまたはドラッグ＆ドロップでアップロード</p><p style="font-size:11px;color:var(--t3);margin-top:5px;">PDF・Word・Excel・画像など</p>`;
     const ni=document.getElementById('fu-input');
-    dropzone.addEventListener('click',()=>ni.click());
-    ni.addEventListener('change',e=>handleFiles(e.target.files,clientName,caseName));
+    dropzone.onclick = ()=>ni.click();
+    ni.onchange = e=>handleFiles(e.target.files,clientName,caseName);
   }
   await loadFileList(clientName, caseName);
 }
