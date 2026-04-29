@@ -1060,21 +1060,28 @@ async function loadFileList(clientName, caseName) {
       return {name:item.name,fullPath:item.fullPath,url,size:meta.size,contentType:meta.contentType,timeCreated:meta.timeCreated};
     }));
     files.sort((a,b)=>new Date(b.timeCreated)-new Date(a.timeCreated));
-    listEl.innerHTML=`<div class="surface" style="overflow:hidden;">
-      ${files.map(f=>`
-      <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border-2);" onmouseover="this.style.background='#F7F5F0'" onmouseout="this.style.background='transparent'">
-        <span style="font-size:20px;flex-shrink:0;">${fileIcon(f.contentType)}</span>
-        <div style="min-width:0;flex:1;">
-          <a href="${f.url}" target="_blank" rel="noopener noreferrer" style="font-size:13px;font-weight:500;color:var(--primary);text-decoration:none;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">${f.name}</a>
-          <p style="font-size:11px;color:var(--t3);margin-top:2px;">${fmtBytes(f.size)}${f.size&&f.timeCreated?' · ':''}${f.timeCreated?new Date(f.timeCreated).toLocaleDateString('ja-JP'):''}</p>
-        </div>
-        <a href="${f.url}&response-content-disposition=attachment" target="_blank" style="color:var(--t3);padding:4px;" onmouseover="this.style.color='var(--primary)'" onmouseout="this.style.color='var(--t3)'">
-          <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
-        </a>
-        <button onclick="deleteStorageFile('${escJS(f.fullPath)}','${escJS(clientName)}','${escJS(caseName)}')" style="color:var(--t3);background:none;border:none;cursor:pointer;padding:4px;" onmouseover="this.style.color='#94190F'" onmouseout="this.style.color='var(--t3)'">
-          <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
-        </button>
-      </div>`).join('')}
+    listEl.innerHTML=`<style>.fu-hidden{display:none}</style><div class="surface" style="overflow:hidden;">
+      ${files.map(f=>{
+        const isImg=f.contentType&&f.contentType.startsWith('image/');
+        const isPDF=f.contentType==='application/pdf';
+        return `<div class="fu-file-row" style="border-bottom:1px solid var(--border-2);">
+          <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;" onmouseover="this.style.background='#F7F5F0'" onmouseout="this.style.background='transparent'">
+            ${isImg?`<img src="${f.url}" style="width:48px;height:48px;object-fit:cover;border-radius:4px;flex-shrink:0;cursor:pointer;" loading="lazy" onclick="this.closest('.fu-file-row').querySelector('.fu-preview-area').classList.toggle('fu-hidden');">`:`<span style="font-size:20px;flex-shrink:0;">${fileIcon(f.contentType)}</span>`}
+            <div style="min-width:0;flex:1;">
+              <a href="${f.url}" target="_blank" rel="noopener noreferrer" style="font-size:13px;font-weight:500;color:var(--primary);text-decoration:none;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">${f.name}</a>
+              <p style="font-size:11px;color:var(--t3);margin-top:2px;">${fmtBytes(f.size)}${f.size&&f.timeCreated?' · ':''}${f.timeCreated?new Date(f.timeCreated).toLocaleDateString('ja-JP'):''}</p>
+            </div>
+            ${isPDF?`<button onclick="this.closest('.fu-file-row').querySelector('.fu-preview-area').classList.toggle('fu-hidden');" style="color:var(--t3);background:none;border:none;cursor:pointer;padding:4px;" onmouseover="this.style.color='var(--primary)'" onmouseout="this.style.color='var(--t3)'" title="プレビュー"><svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg></button>`:''}
+            <a href="${f.url}&response-content-disposition=attachment" target="_blank" style="color:var(--t3);padding:4px;" onmouseover="this.style.color='var(--primary)'" onmouseout="this.style.color='var(--t3)'">
+              <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+            </a>
+            <button onclick="deleteStorageFile('${escJS(f.fullPath)}','${escJS(clientName)}','${escJS(caseName)}')" style="color:var(--t3);background:none;border:none;cursor:pointer;padding:4px;" onmouseover="this.style.color='#94190F'" onmouseout="this.style.color='var(--t3)'">
+              <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+            </button>
+          </div>
+          ${isImg||isPDF?`<div class="fu-preview-area fu-hidden" style="padding:0 14px 12px;">${isImg?`<img src="${f.url}" style="max-width:100%;max-height:400px;border-radius:6px;" loading="lazy">`:`<iframe src="${f.url}" style="width:100%;height:500px;border:1px solid var(--border-2);border-radius:6px;" loading="lazy"></iframe>`}</div>`:''}
+        </div>`;
+      }).join('')}
     </div>`;
   } catch {
     listEl.innerHTML=`<p style="text-align:center;padding:24px 0;font-size:13px;color:#94190F;">ファイル一覧の取得に失敗しました</p>`;
